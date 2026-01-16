@@ -424,6 +424,79 @@ def render_revenue_inputs(data):
     # Import styling function
     from dataframe_styles import style_revenue_inputs
 
+    # Persistent Summary Bar - Aggregate metrics across all territories
+    st.markdown("### 📊 DTC Summary (All Territories)")
+
+    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK']
+    total_revenue = 0
+    total_marketing = 0
+    total_customers = 0
+    total_traffic = 0
+    territories_with_data = 0
+
+    for territory in dtc_territories:
+        if territory in st.session_state.data.get('dtc', {}):
+            dtc_df = st.session_state.data['dtc'][territory]
+            if not dtc_df.empty:
+                territories_with_data += 1
+                date_cols = [c for c in dtc_df.columns if c.startswith('202')]
+
+                # Total Revenue
+                revenue_row = dtc_df[dtc_df['Metric'] == 'Total Revenue']
+                if not revenue_row.empty:
+                    total_revenue += revenue_row[date_cols].sum().sum()
+
+                # Marketing Budget
+                marketing_row = dtc_df[dtc_df['Metric'] == 'Marketing Budget']
+                if not marketing_row.empty:
+                    total_marketing += marketing_row[date_cols].sum().sum()
+
+                # Customers
+                customers_row = dtc_df[dtc_df['Metric'] == 'New Customers']
+                if not customers_row.empty:
+                    total_customers += customers_row[date_cols].sum().sum()
+
+                # Traffic
+                traffic_row = dtc_df[dtc_df['Metric'] == 'Traffic']
+                if not traffic_row.empty:
+                    total_traffic += traffic_row[date_cols].sum().sum()
+
+    # Calculate average conversion rate
+    avg_cvr = (total_customers / total_traffic * 100) if total_traffic > 0 else 0
+
+    # Display summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric(
+            "Total DTC Revenue",
+            f"£{total_revenue/1e6:.1f}M",
+            delta=f"{territories_with_data} territories"
+        )
+
+    with col2:
+        st.metric(
+            "Total Marketing Budget",
+            f"£{total_marketing/1e6:.1f}M",
+            delta=f"{(total_marketing/total_revenue*100):.1f}% of revenue" if total_revenue > 0 else "0%"
+        )
+
+    with col3:
+        st.metric(
+            "Total Customers",
+            f"{int(total_customers):,}",
+            delta=f"Avg CVR: {avg_cvr:.2f}%"
+        )
+
+    with col4:
+        st.metric(
+            "Total Traffic",
+            f"{int(total_traffic):,}",
+            delta=f"£{(total_revenue/total_customers):.0f} AOV" if total_customers > 0 else "N/A"
+        )
+
+    st.markdown("---")
+
     # Territory selector
     territory = st.selectbox(
         "Select Territory",
