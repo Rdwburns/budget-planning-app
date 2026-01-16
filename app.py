@@ -873,6 +873,15 @@ def render_b2b_management(data):
     # Apply filters
     filtered = b2b[b2b['Country Group'].isin(region_filter)]
 
+    # Filter out generic placeholder names (Retailer 1/2/3, Customer 1/2/3, etc.)
+    placeholder_patterns = [
+        'Retailer 1', 'Retailer 2', 'Retailer 3',
+        'Customer 1', 'Customer 2', 'Customer 3',
+        'Placeholder', 'TBD', 'Test Customer'
+    ]
+    for pattern in placeholder_patterns:
+        filtered = filtered[~filtered['Customer Name'].str.contains(pattern, case=False, na=False)]
+
     if search:
         filtered = filtered[filtered['Customer Name'].str.contains(search, case=False, na=False)]
 
