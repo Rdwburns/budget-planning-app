@@ -545,6 +545,76 @@ def render_revenue_inputs(data):
                 sub_rev = sub_data[sub_data['Metric'].isin(['Returning Revenue (Subs)', 'New Customer Revenue (Subs)'])][date_cols].sum().sum()
                 st.metric("Subscription Revenue", f"£{sub_rev:,.0f}")
 
+            # Retention & Decay Rate Inputs
+            st.markdown("---")
+            st.markdown("#### 🔄 Retention & Decay Settings")
+            st.caption("💡 These rates control how many subscription customers continue each month")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                retention_rate = st.number_input(
+                    "Monthly Retention Rate (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=85.0,
+                    step=0.5,
+                    help="Percentage of customers who remain subscribed each month",
+                    key=f"retention_rate_{territory}"
+                )
+
+                # Calculate projected retention impact
+                if new_subs_total > 0:
+                    month_6_retained = new_subs_total * ((retention_rate/100) ** 6)
+                    month_12_retained = new_subs_total * ((retention_rate/100) ** 12)
+                    st.info(f"📊 Impact: Of {int(new_subs_total):,} new subs, ~{int(month_6_retained):,} remain after 6 months, ~{int(month_12_retained):,} after 12 months")
+
+            with col2:
+                decay_rate = 100 - retention_rate
+                st.metric(
+                    "Monthly Churn/Decay Rate (%)",
+                    f"{decay_rate:.1f}%",
+                    help="Inverse of retention rate - percentage lost each month"
+                )
+
+                # Churn visualization
+                if decay_rate > 20:
+                    st.error(f"⚠️ High churn rate! Consider improving retention strategies")
+                elif decay_rate > 10:
+                    st.warning(f"⚠️ Moderate churn - monitor retention closely")
+                else:
+                    st.success(f"✅ Good retention - low churn rate")
+
+            # Visual retention curve
+            with st.expander("📈 View Retention Curve"):
+                import plotly.graph_objects as go
+
+                months = list(range(1, 13))
+                retention_values = [100 * ((retention_rate/100) ** m) for m in months]
+
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=months,
+                    y=retention_values,
+                    mode='lines+markers',
+                    name='Retention %',
+                    line=dict(color='#1f77b4', width=3),
+                    marker=dict(size=8)
+                ))
+
+                fig.update_layout(
+                    title=f'Customer Retention Over 12 Months ({retention_rate}% monthly retention)',
+                    xaxis_title='Months',
+                    yaxis_title='Customers Retained (%)',
+                    yaxis=dict(range=[0, 110]),
+                    hovermode='x unified'
+                )
+
+                fig.add_hline(y=50, line_dash="dash", line_color="red",
+                             annotation_text="50% retained", annotation_position="right")
+
+                st.plotly_chart(fig, use_container_width=True)
+
             # Cohort adjustment warning
             cohort_adj = sub_data[sub_data['Metric'] == 'Missing Revenue (Cohort Adjustment)'][date_cols]
             if not cohort_adj.empty:
