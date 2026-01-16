@@ -343,9 +343,9 @@ def style_revenue_inputs(df):
             if any(m in metric_name for m in currency_metrics):
                 row_format[col] = '£{:,.0f}'
 
-            # Percentage formatting
+            # Percentage formatting (multiply by 100)
             elif any(m in metric_name for m in percentage_metrics):
-                row_format[col] = '{:.1f}%'
+                row_format[col] = lambda x: f'{x*100:.1f}%' if pd.notna(x) else '-'
 
             # Number formatting
             else:
