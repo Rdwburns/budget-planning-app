@@ -18,6 +18,16 @@ class BudgetDataLoader:
             'Other EU': 'CE', 'ROW': 'ROW'
         }
         self.channels = ['DTC', 'B2B', 'Marketplace', 'TikTok']
+        # FY27 period: 2026-02 to 2027-01
+        self.fy27_start = '2026-02'
+        self.fy27_end = '2027-01'
+
+    def filter_fy27_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Filter dataframe to only include FY27 date columns (2026-02 to 2027-01)"""
+        date_cols = [c for c in df.columns if isinstance(c, str) and c.startswith('20')]
+        fy27_cols = [c for c in date_cols if self.fy27_start <= c <= self.fy27_end]
+        non_date_cols = [c for c in df.columns if c not in date_cols]
+        return df[non_date_cols + fy27_cols]
 
     def load_b2b_data(self) -> pd.DataFrame:
         """Load B2B customer revenue data"""
@@ -67,6 +77,9 @@ class BudgetDataLoader:
         for col in date_cols:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
+        # Filter to FY27 period (2026-02 to 2027-01)
+        df = self.filter_fy27_columns(df)
+
         return df
 
     def load_overheads(self) -> pd.DataFrame:
@@ -93,6 +106,9 @@ class BudgetDataLoader:
         # Convert all date columns to numeric
         for col in date_cols:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # Filter to FY27 period (2026-02 to 2027-01)
+        df = self.filter_fy27_columns(df)
 
         return df
 
@@ -123,6 +139,9 @@ class BudgetDataLoader:
         date_cols = [c for c in df.columns if c.startswith('202')]
         for col in date_cols:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # Filter to FY27 period (2026-02 to 2027-01)
+        df = self.filter_fy27_columns(df)
 
         return df
 
@@ -174,17 +193,20 @@ class BudgetDataLoader:
             }
 
             # Get month columns (starting from column 5)
-            months = []
+            all_months = []
             for col in range(5, min(42, ws.max_column + 1)):  # Extended to capture more months
                 val = ws.cell(row=2, column=col).value
                 if val and isinstance(val, datetime):
-                    months.append(val.strftime('%Y-%m'))
+                    month_str = val.strftime('%Y-%m')
+                    all_months.append((col, month_str))
+
+            # Filter to FY27 period (2026-02 to 2027-01)
+            months = [(col, month) for col, month in all_months if self.fy27_start <= month <= self.fy27_end]
 
             for metric, row in metric_rows.items():
                 row_data = {'Metric': metric, 'Territory': territory}
-                for i, month in enumerate(months):
-                    col = 5 + i
-                    val = ws.cell(row=row, column=col).value
+                for col_num, month in months:
+                    val = ws.cell(row=row, column=col_num).value
                     # Handle numeric conversion
                     if val is not None:
                         try:
