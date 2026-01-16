@@ -279,3 +279,100 @@ def style_pl_view(df):
     styled = styled.applymap(color_negatives)
 
     return styled
+
+
+def style_revenue_inputs(df):
+    """
+    Pre-configured styling for DTC revenue inputs
+    Formats rows based on metric type:
+    - Currency: Total Revenue, Marketing Budget
+    - Percentage: Conversion Rate
+    - Number: Traffic, Customers, Orders
+    """
+    styled = df.style
+
+    # Define metric categories
+    currency_metrics = ['Total Revenue', 'Marketing Budget']
+    percentage_metrics = ['Conversion Rate']
+    number_metrics = ['Traffic', 'New Customers', 'New Subscription Customers',
+                     'Recurring Subscription Customers', 'Returning Customers', 'Total Orders']
+
+    # Format each row based on metric type
+    def format_by_metric(row):
+        metric_name = str(row.name)
+        formats = []
+
+        for col in df.columns:
+            val = row[col]
+
+            # Currency formatting
+            if any(m in metric_name for m in currency_metrics):
+                if pd.notna(val):
+                    formats.append(f'£{val:,.0f}')
+                else:
+                    formats.append('-')
+
+            # Percentage formatting
+            elif any(m in metric_name for m in percentage_metrics):
+                if pd.notna(val):
+                    # Assume value is in decimal form (0.15 = 15%)
+                    if val < 1 and val > 0:
+                        formats.append(f'{val*100:.1f}%')
+                    else:
+                        # If already in percentage form
+                        formats.append(f'{val:.1f}%')
+                else:
+                    formats.append('-')
+
+            # Number formatting (with thousand separators)
+            else:
+                if pd.notna(val):
+                    formats.append(f'{val:,.0f}')
+                else:
+                    formats.append('-')
+
+        return formats
+
+    # Apply row-wise formatting
+    for idx in df.index:
+        row_format = {}
+        metric_name = str(idx)
+
+        for col in df.columns:
+            # Currency formatting
+            if any(m in metric_name for m in currency_metrics):
+                row_format[col] = '£{:,.0f}'
+
+            # Percentage formatting
+            elif any(m in metric_name for m in percentage_metrics):
+                row_format[col] = '{:.1f}%'
+
+            # Number formatting
+            else:
+                row_format[col] = '{:,.0f}'
+
+        styled = styled.format(row_format, subset=pd.IndexSlice[idx, :])
+
+    # Add zebra stripes for readability
+    def stripe_rows(row):
+        if list(df.index).index(row.name) % 2 == 0:
+            return ['background-color: #f9f9f9'] * len(row)
+        return ['background-color: #ffffff'] * len(row)
+
+    styled = styled.apply(stripe_rows, axis=1)
+
+    # Highlight revenue and budget rows
+    def highlight_key_metrics(row):
+        metric_name = str(row.name)
+        if 'Total Revenue' in metric_name:
+            return ['background-color: #d4edda; font-weight: bold'] * len(row)
+        elif 'Marketing Budget' in metric_name:
+            return ['background-color: #fff3cd; font-weight: bold'] * len(row)
+        return [''] * len(row)
+
+    styled = styled.apply(highlight_key_metrics, axis=1)
+
+    # Right-align all numeric columns
+    styled = styled.set_properties(**{'text-align': 'right'})
+
+    return styled

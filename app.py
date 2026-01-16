@@ -269,6 +269,9 @@ def render_revenue_inputs(data):
         st.warning("Please upload a budget file first")
         return
 
+    # Import styling function
+    from dataframe_styles import style_revenue_inputs
+
     # Territory selector
     territory = st.selectbox(
         "Select Territory",
@@ -290,6 +293,15 @@ def render_revenue_inputs(data):
             # Show only date columns
             date_cols = [c for c in display_df.columns if c.startswith('202')]
             display_df = display_df[date_cols[:12]]  # Show first 12 months
+
+            # Show formatted view
+            st.markdown("#### 📋 Current Values (Formatted)")
+            styled_df = style_revenue_inputs(display_df)
+            st.dataframe(styled_df, width="stretch")
+
+            # Show editable version
+            st.markdown("#### ✏️ Edit Values")
+            st.caption("💡 Format guide: Currency (£1,234), Percentage (15.5), Numbers (1,234)")
 
             edited_df = st.data_editor(
                 display_df,
