@@ -107,14 +107,17 @@ def render_sidebar():
         )
 
         if uploaded_file:
-            with st.spinner("Loading data..."):
+                        # Check if this is a new file to avoid reprocessing
+                        file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+                        if st.session_state.get('loaded_file_id') != file_id:
+                                with st.spinner("Loading data..."):
                 # Save to temp location and load
                 temp_path = Path("/tmp/budget_upload.xlsx")
                 temp_path.write_bytes(uploaded_file.getvalue())
                 st.session_state.data = load_all_data(str(temp_path))
                 st.session_state.file_loaded = True
-                st.success("Data loaded!")
-                
+                                                        st.session_state.loaded_file_id = file_id
+                st.rerun()  # Refresh to show loaded data                
         if st.session_state.get('file_loaded'):
             st.success("✅ Data loaded")
 
