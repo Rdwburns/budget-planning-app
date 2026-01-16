@@ -232,9 +232,32 @@ def render_dashboard(data):
     b2b = b2b[b2b['Total Revenue'] > 0]
 
     top_customers = b2b.nlargest(10, 'Total Revenue')[['Customer Name', 'Country', 'Country Group', 'Total Revenue']]
-    top_customers['Total Revenue'] = top_customers['Total Revenue'].apply(lambda x: f"£{x:,.0f}")
 
-    st.dataframe(top_customers, width='stretch', hide_index=True)
+    # Style the top customers table
+    def style_top_customers(df):
+        styled = df.style
+
+        # Add gradient to revenue column
+        styled = styled.background_gradient(
+            subset=['Total Revenue'],
+            cmap='Greens',
+            vmin=df['Total Revenue'].min(),
+            vmax=df['Total Revenue'].max()
+        )
+
+        # Format revenue as currency
+        styled = styled.format({'Total Revenue': '£{:,.0f}'})
+
+        # Bold the top 3 customers
+        def bold_top_3(s):
+            is_top_3 = [True if i < 3 else False for i in range(len(s))]
+            return ['font-weight: bold' if v else '' for v in is_top_3]
+
+        styled = styled.apply(bold_top_3, axis=0)
+
+        return styled
+
+    st.dataframe(style_top_customers(top_customers), width='stretch', hide_index=True)
 
 
 def render_revenue_inputs(data):
