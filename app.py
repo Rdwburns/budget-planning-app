@@ -1023,38 +1023,126 @@ def render_scenario_planning(data):
     calc = PLCalculator(data, scenario)
     base_calc = PLCalculator(data, {})
 
-    # Calculate key metrics
-    col1, col2, col3 = st.columns(3)
+    # Calculate all channel revenues
+    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK']
 
+    # Base case
     base_b2b = sum(base_calc.calculate_b2b_revenue().values())
+    base_dtc = sum(
+        sum(base_calc.calculate_dtc_revenue(territory).values())
+        for territory in dtc_territories
+    )
+    base_marketplace = sum(
+        sum(base_calc.calculate_marketplace_revenue(territory).values())
+        for territory in dtc_territories
+    )
+    base_total = base_b2b + base_dtc + base_marketplace
+
+    # Scenario case
     new_b2b = base_b2b * (1 + b2b_growth/100)
+    new_dtc = base_dtc * (1 + dtc_growth/100)
+    new_marketplace = base_marketplace * (1 + mp_growth/100)
+    new_total = new_b2b + new_dtc + new_marketplace
+
+    # Display metrics by channel
+    st.markdown("#### Revenue by Channel")
+
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric(
-            "B2B Revenue",
-            f"£{new_b2b/1e6:.2f}M",
-            delta=f"{b2b_growth:+.1f}%"
+            "Total Revenue",
+            f"£{new_total/1e6:.1f}M",
+            delta=f"£{(new_total-base_total)/1e6:.1f}M ({((new_total-base_total)/base_total*100):+.1f}%)" if base_total > 0 else "N/A"
         )
 
     with col2:
-        # Estimate EBITDA impact
-        base_ebitda = base_b2b * 0.15  # Rough estimate
-        impact = (dtc_growth + b2b_growth + mp_growth) / 3 - overhead_change
-        new_ebitda = base_ebitda * (1 + impact/100)
-
         st.metric(
-            "Est. EBITDA",
-            f"£{new_ebitda/1e6:.2f}M",
-            delta=f"{impact:+.1f}%"
+            "B2B Revenue",
+            f"£{new_b2b/1e6:.1f}M",
+            delta=f"{b2b_growth:+.1f}% | £{(new_b2b-base_b2b)/1e6:.1f}M"
         )
 
     with col3:
-        margin_impact = -cogs_change - fulfilment_change
         st.metric(
-            "Margin Impact",
-            f"{margin_impact:+.1f}pp",
-            delta="improvement" if margin_impact > 0 else "decline"
+            "DTC Revenue",
+            f"£{new_dtc/1e6:.1f}M",
+            delta=f"{dtc_growth:+.1f}% | £{(new_dtc-base_dtc)/1e6:.1f}M"
         )
+
+    with col4:
+        st.metric(
+            "Marketplace Revenue",
+            f"£{new_marketplace/1e6:.1f}M",
+            delta=f"{mp_growth:+.1f}% | £{(new_marketplace-base_marketplace)/1e6:.1f}M"
+        )
+
+    # Channel breakdown table
+    st.markdown("---")
+    st.markdown("#### Channel-by-Channel Breakdown")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Comparison table
+        channel_comparison = pd.DataFrame({
+            'Channel': ['B2B', 'DTC', 'Marketplace', 'Total'],
+            'Base (£)': [base_b2b, base_dtc, base_marketplace, base_total],
+            'Scenario (£)': [new_b2b, new_dtc, new_marketplace, new_total],
+            'Variance (£)': [
+                new_b2b - base_b2b,
+                new_dtc - base_dtc,
+                new_marketplace - base_marketplace,
+                new_total - base_total
+            ],
+            'Variance (%)': [
+                b2b_growth,
+                dtc_growth,
+                mp_growth,
+                ((new_total-base_total)/base_total*100) if base_total > 0 else 0
+            ]
+        })
+
+        # Format currency columns
+        for col in ['Base (£)', 'Scenario (£)', 'Variance (£)']:
+            channel_comparison[col] = channel_comparison[col].apply(lambda x: f"£{x:,.0f}")
+
+        channel_comparison['Variance (%)'] = channel_comparison['Variance (%)'].apply(lambda x: f"{x:+.1f}%")
+
+        st.dataframe(channel_comparison, hide_index=True, use_container_width=True)
+
+    with col2:
+        # Visualization comparing base vs scenario
+        import plotly.graph_objects as go
+
+        fig = go.Figure()
+
+        channels = ['B2B', 'DTC', 'Marketplace']
+        base_values = [base_b2b/1e6, base_dtc/1e6, base_marketplace/1e6]
+        scenario_values = [new_b2b/1e6, new_dtc/1e6, new_marketplace/1e6]
+
+        fig.add_trace(go.Bar(
+            name='Base',
+            x=channels,
+            y=base_values,
+            marker_color='#1f77b4'
+        ))
+
+        fig.add_trace(go.Bar(
+            name='Scenario',
+            x=channels,
+            y=scenario_values,
+            marker_color='#ff7f0e'
+        ))
+
+        fig.update_layout(
+            title='Revenue Comparison: Base vs Scenario',
+            yaxis_title='Revenue (£M)',
+            barmode='group',
+            hovermode='x unified'
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
 
     # Detailed P&L comparison
     with st.expander("📊 Detailed P&L Comparison"):
