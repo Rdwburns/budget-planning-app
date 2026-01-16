@@ -65,13 +65,26 @@ class BudgetDataLoader:
         # Clean data
         df = df.dropna(subset=['Customer Name'])
 
-        # Handle Customer Margin if it exists
+        # Separate revenue rows from cost rows
+        # Revenue rows: Customer Margin is blank/NaN
+        # Cost rows: Customer Margin has string values like "Retros", "Rebates", etc.
+        # Aggregation rows: Customer Name contains summary terms
         if 'Customer Margin' in df.columns:
+            # Keep only revenue rows (where Customer Margin is blank/NaN or numeric 0)
+            # Cost rows have string values in Customer Margin column
+            margin_is_numeric = pd.to_numeric(df['Customer Margin'], errors='coerce').notna()
+            margin_is_zero_or_nan = pd.to_numeric(df['Customer Margin'], errors='coerce').fillna(0) == 0
+            df = df[margin_is_zero_or_nan | margin_is_numeric]
             df['Customer Margin'] = pd.to_numeric(df['Customer Margin'], errors='coerce').fillna(0)
         else:
-            # Add column with 0 if it doesn't exist
             df['Customer Margin'] = 0
             print("Warning: 'Customer Margin' column not found in B2B data, defaulting to 0")
+
+        # Filter out aggregation rows (contain summary terms)
+        summary_terms = ['Total', 'Grand Total', 'Sub Total', 'Sum', 'CM1', 'CM2', 'CM3',
+                        'EBITDA', 'CoGS', 'Fulfilment', 'Revenue', 'All Customers']
+        for term in summary_terms:
+            df = df[~df['Customer Name'].str.contains(term, case=False, na=False)]
 
         # Convert all date columns to numeric
         for col in date_cols:
