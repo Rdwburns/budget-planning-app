@@ -144,44 +144,54 @@ def render_dashboard(data):
 
     calc = PLCalculator(data)
 
-    # Calculate totals
+    # Calculate totals across all channels
     b2b_total = sum(calc.calculate_b2b_revenue().values())
+
+    # Calculate DTC total across all territories
+    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK']
+    dtc_total = sum(
+        sum(calc.calculate_dtc_revenue(territory).values())
+        for territory in dtc_territories
+    )
+
+    # Calculate Marketplace total across all territories
+    marketplace_total = sum(
+        sum(calc.calculate_marketplace_revenue(territory).values())
+        for territory in dtc_territories
+    )
+
+    # Total revenue across ALL channels
+    total_revenue = b2b_total + dtc_total + marketplace_total
 
     # KPI Cards
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric(
-            label="Total B2B Revenue",
-            value=f"£{b2b_total/1e6:.1f}M",
+            label="Total Revenue (All Channels)",
+            value=f"£{total_revenue/1e6:.1f}M",
             delta="+12% vs LY"
         )
 
     with col2:
-        # Count active B2B customers
-        b2b_customers = len(data['b2b'][data['b2b']['Customer Name'].notna()])
         st.metric(
-            label="B2B Customers",
-            value=f"{b2b_customers}",
-            delta="+15"
+            label="B2B Revenue",
+            value=f"£{b2b_total/1e6:.1f}M",
+            delta=f"{(b2b_total/total_revenue)*100:.0f}% of total" if total_revenue > 0 else "0%"
         )
 
     with col3:
-        # Get territories with data
-        territories_active = len([t for t in data.get('dtc', {}) if data['dtc'][t] is not None])
         st.metric(
-            label="Active Territories",
-            value=f"{territories_active}",
-            delta="0"
+            label="DTC Revenue",
+            value=f"£{dtc_total/1e6:.1f}M",
+            delta=f"{(dtc_total/total_revenue)*100:.0f}% of total" if total_revenue > 0 else "0%"
         )
 
     with col4:
-        # Calculate overhead total
-        oh_total = sum(calc.calculate_overheads().values())
         st.metric(
-            label="Total Overheads",
-            value=f"£{abs(oh_total)/1e6:.1f}M",
-            delta="-5%"
+            label="Marketplace Revenue",
+            value=f"£{marketplace_total/1e6:.1f}M",
+            delta=f"{(marketplace_total/total_revenue)*100:.0f}% of total" if total_revenue > 0 else "0%"
         )
 
     st.markdown("---")
@@ -267,6 +277,139 @@ def render_dashboard(data):
         return styled
 
     st.dataframe(style_top_customers(top_customers), width='stretch', hide_index=True)
+
+    # Channel Mix Visualization
+    st.markdown("---")
+    st.subheader("📊 Revenue by Channel")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Channel mix pie chart
+        if total_revenue > 0:
+            import plotly.express as px
+
+            channel_data = pd.DataFrame({
+                'Channel': ['B2B', 'DTC', 'Marketplace'],
+                'Revenue': [b2b_total, dtc_total, marketplace_total],
+                'Percentage': [
+                    (b2b_total/total_revenue)*100,
+                    (dtc_total/total_revenue)*100,
+                    (marketplace_total/total_revenue)*100
+                ]
+            })
+
+            fig = px.pie(
+                channel_data,
+                values='Revenue',
+                names='Channel',
+                title='Channel Mix (FY)',
+                hole=0.4,
+                color_discrete_sequence=['#1f77b4', '#ff7f0e', '#2ca02c']
+            )
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        # Channel revenue table
+        channel_table = pd.DataFrame({
+            'Channel': ['B2B', 'DTC', 'Marketplace', 'Total'],
+            'Revenue': [b2b_total, dtc_total, marketplace_total, total_revenue],
+            '% of Total': [
+                f"{(b2b_total/total_revenue)*100:.1f}%" if total_revenue > 0 else "0%",
+                f"{(dtc_total/total_revenue)*100:.1f}%" if total_revenue > 0 else "0%",
+                f"{(marketplace_total/total_revenue)*100:.1f}%" if total_revenue > 0 else "0%",
+                "100.0%"
+            ]
+        })
+        channel_table['Revenue'] = channel_table['Revenue'].apply(lambda x: f"£{x:,.0f}")
+        st.dataframe(channel_table, hide_index=True, use_container_width=True)
+
+    # DTC Revenue by Territory
+    st.markdown("---")
+    st.subheader("🌍 DTC Revenue by Territory")
+
+    dtc_territory_data = []
+    for territory in dtc_territories:
+        territory_revenue = calc.calculate_dtc_revenue(territory)
+        total = sum(territory_revenue.values())
+        if total > 0:  # Only show territories with revenue
+            dtc_territory_data.append({
+                'Territory': territory,
+                'Revenue': total,
+                '% of DTC': f"{(total/dtc_total)*100:.1f}%" if dtc_total > 0 else "0%"
+            })
+
+    if dtc_territory_data:
+        dtc_territory_df = pd.DataFrame(dtc_territory_data)
+        dtc_territory_df = dtc_territory_df.sort_values('Revenue', ascending=False)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # DTC territory bar chart
+            import plotly.express as px
+            fig = px.bar(
+                dtc_territory_df,
+                x='Territory',
+                y='Revenue',
+                title='DTC Revenue by Territory',
+                color='Revenue',
+                color_continuous_scale='Blues'
+            )
+            fig.update_layout(showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            # DTC territory table with formatting
+            display_df = dtc_territory_df.copy()
+            display_df['Revenue'] = display_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
+            st.dataframe(display_df, hide_index=True, use_container_width=True)
+    else:
+        st.info("No DTC revenue data available")
+
+    # Marketplace Revenue by Territory
+    st.markdown("---")
+    st.subheader("🛒 Marketplace Revenue by Territory")
+
+    marketplace_territory_data = []
+    for territory in dtc_territories:
+        territory_revenue = calc.calculate_marketplace_revenue(territory)
+        total = sum(territory_revenue.values())
+        if total > 0:  # Only show territories with revenue
+            marketplace_territory_data.append({
+                'Territory': territory,
+                'Revenue': total,
+                '% of Marketplace': f"{(total/marketplace_total)*100:.1f}%" if marketplace_total > 0 else "0%"
+            })
+
+    if marketplace_territory_data:
+        marketplace_territory_df = pd.DataFrame(marketplace_territory_data)
+        marketplace_territory_df = marketplace_territory_df.sort_values('Revenue', ascending=False)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Marketplace territory bar chart
+            import plotly.express as px
+            fig = px.bar(
+                marketplace_territory_df,
+                x='Territory',
+                y='Revenue',
+                title='Marketplace Revenue by Territory',
+                color='Revenue',
+                color_continuous_scale='Greens'
+            )
+            fig.update_layout(showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            # Marketplace territory table with formatting
+            display_df = marketplace_territory_df.copy()
+            display_df['Revenue'] = display_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
+            st.dataframe(display_df, hide_index=True, use_container_width=True)
+    else:
+        st.info("No Marketplace revenue data available")
 
 
 def render_revenue_inputs(data):
