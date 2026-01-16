@@ -181,28 +181,28 @@ class BudgetDataLoader:
                 'Total Orders': 7,
 
                 # Customer Segmentation
-                'New Customers (Non-Subs)': 8,
-                'New Subscription Customers': 9,
-                'Recurring Subscription Customers': 10,
-                'Returning Customers (Non-Subs)': 11,
+                'New Customers (Non-Subs)': 9,      # Fixed: was 8
+                'New Subscription Customers': 10,    # Fixed: was 9
+                'Recurring Subscription Customers': 11,  # Fixed: was 10
+                'Returning Customers (Non-Subs)': 12,    # Fixed: was 11
 
                 # Revenue by Segment - Returning
-                'Returning AOV (Non-Subs)': 14,
-                'Returning Revenue (Non-Subs)': 15,
-                'Returning AOV (Subs)': 16,
-                'Returning Revenue (Subs)': 17,
+                'Returning AOV (Non-Subs)': 15,      # Fixed: was 14
+                'Returning Revenue (Non-Subs)': 16,  # Fixed: was 15
+                'Returning AOV (Subs)': 17,          # Fixed: was 16
+                'Returning Revenue (Subs)': 18,      # Fixed: was 17
 
                 # Revenue by Segment - New
-                'New Customer AOV (Non-Subs)': 19,
-                'New Customer Revenue (Non-Subs)': 20,
-                'New Customer AOV (Subs)': 21,
-                'New Customer Revenue (Subs)': 22,
+                'New Customer AOV (Non-Subs)': 20,       # Fixed: was 19
+                'New Customer Revenue (Non-Subs)': 21,   # Fixed: was 20
+                'New Customer AOV (Subs)': 22,           # Fixed: was 21
+                'New Customer Revenue (Subs)': 23,       # Fixed: was 22
 
                 # Totals & Adjustments
-                'Total Revenue': 24,
+                'Total Revenue': 25,  # CRITICAL FIX: was 24 (formula cell) - now uses Actual Revenue row
                 'Actual Revenue': 25,
-                'Missing Revenue (Cohort Adjustment)': 26,
-                'Marketing Budget': 36,
+                'Missing Revenue (Cohort Adjustment)': 27,  # Fixed: was 26
+                'Marketing Budget': 29,  # Fixed: was 36
             }
 
             # Get month columns (starting from column 5)
