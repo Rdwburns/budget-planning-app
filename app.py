@@ -118,8 +118,17 @@ def render_sidebar():
                 st.session_state.file_loaded = True
                 st.session_state.loaded_file_id = file_id
                 st.rerun()  # Refresh to show loaded data
+
         if st.session_state.get('file_loaded'):
             st.success("✅ Data loaded")
+
+            # Display validation warnings if any
+            if st.session_state.data and 'validation_warnings' in st.session_state.data:
+                warnings = st.session_state.data['validation_warnings']
+                if warnings:
+                    with st.expander("⚠️ Data Validation Warnings", expanded=False):
+                        for warning in warnings:
+                            st.warning(warning)
 
         return page
 
@@ -191,7 +200,7 @@ def render_dashboard(data):
 
         region_df = pd.DataFrame(region_data)
         region_df['Revenue'] = region_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
-        st.dataframe(region_df, use_container_width=True, hide_index=True)
+        st.dataframe(region_df, width="stretch", hide_index=True)
 
     with col2:
         st.subheader("📅 Monthly Trend")
@@ -210,12 +219,22 @@ def render_dashboard(data):
     st.subheader("🏆 Top 10 B2B Customers (FY)")
 
     b2b = data['b2b'].copy()
+
+    # Filter out summary/total rows that appear in Excel exports
+    summary_terms = ['Revenue', 'Grand Total', 'Sub Total', 'CM1', 'CM2', 'Total', 'EBITDA', 'CoGS', 'Fulfilment']
+    b2b = b2b[~b2b['Customer Name'].str.contains('|'.join(summary_terms), case=False, na=False)]
+    b2b = b2b[b2b['Customer Name'].notna() & (b2b['Customer Name'].str.strip() != '')]
+
     date_cols = [c for c in b2b.columns if c.startswith('202')]
     b2b['Total Revenue'] = b2b[date_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=1)
+
+    # Only show customers with revenue > 0
+    b2b = b2b[b2b['Total Revenue'] > 0]
+
     top_customers = b2b.nlargest(10, 'Total Revenue')[['Customer Name', 'Country', 'Country Group', 'Total Revenue']]
     top_customers['Total Revenue'] = top_customers['Total Revenue'].apply(lambda x: f"£{x:,.0f}")
 
-    st.dataframe(top_customers, use_container_width=True, hide_index=True)
+    st.dataframe(top_customers, width='stretch', hide_index=True)
 
 
 def render_revenue_inputs(data):
@@ -251,14 +270,18 @@ def render_revenue_inputs(data):
 
             edited_df = st.data_editor(
                 display_df,
-                use_container_width=True,
+                width="stretch",
                 num_rows="fixed",
                 key=f"dtc_editor_{territory}"
             )
 
             if st.button("💾 Save Changes", key=f"save_dtc_{territory}"):
-                st.success(f"Changes saved for {territory}!")
-                # Here we would persist changes back to session state
+                # Update session state with edited DTC data
+                # Reconstruct the full dataframe with the metric names
+                updated_dtc = edited_df.copy()
+                updated_dtc['Territory'] = territory
+                st.session_state.data['dtc'][territory] = updated_dtc
+                st.success(f"✅ Changes saved for {territory} in session!")
     else:
         st.info(f"No DTC data available for {territory}")
 
@@ -370,7 +393,7 @@ def render_b2b_management(data):
 
     edited_b2b = st.data_editor(
         display_df,
-        use_container_width=True,
+        width="stretch",
         num_rows="dynamic",
         column_config={
             "Customer Name": st.column_config.TextColumn("Customer", width="medium"),
@@ -384,8 +407,23 @@ def render_b2b_management(data):
 
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("💾 Save Changes", type="primary"):
-            st.success("Changes saved!")
+        if st.button("💾 Save Changes", type="primary", key="save_b2b_main"):
+            # Update session state with edited data
+            # Remove the calculated 'Total' column before saving
+            edited_b2b_clean = edited_b2b.drop(columns=['Total'], errors='ignore')
+
+            # Update the original b2b dataframe with edited values
+            # Match by Customer Name and update
+            for idx, row in edited_b2b_clean.iterrows():
+                customer_name = row['Customer Name']
+                mask = data['b2b']['Customer Name'] == customer_name
+                for col in edited_b2b_clean.columns:
+                    if col in data['b2b'].columns:
+                        data['b2b'].loc[mask, col] = row[col]
+
+            # Update session state
+            st.session_state.data['b2b'] = data['b2b']
+            st.success("✅ Changes saved to session! (Note: Changes are not persisted to Excel file)")
 
     # Add new customer form
     st.markdown("---")
@@ -454,7 +492,7 @@ def render_cost_management(data):
 
         st.data_editor(
             filtered_oh[display_cols],
-            use_container_width=True,
+            width="stretch",
             num_rows="dynamic",
             key="oh_editor"
         )
@@ -466,7 +504,7 @@ def render_cost_management(data):
         # Show summary
         payroll = data.get('payroll', pd.DataFrame())
         if not payroll.empty:
-            st.dataframe(payroll.head(20), use_container_width=True)
+            st.dataframe(payroll.head(20), width="stretch")
 
     with tab3:
         st.markdown("### Fulfilment Rates")
@@ -475,15 +513,17 @@ def render_cost_management(data):
 
         edited_ful = st.data_editor(
             fulfilment,
-            use_container_width=True,
+            width="stretch",
             column_config={
                 "Rate": st.column_config.NumberColumn("Rate %", format="%.1f%%")
             },
             key="ful_editor"
         )
 
-        if st.button("💾 Save Fulfilment Rates"):
-            st.success("Rates updated!")
+        if st.button("💾 Save Fulfilment Rates", key="save_fulfilment"):
+            # Update session state with edited fulfilment rates
+            st.session_state.data['fulfilment'] = edited_ful
+            st.success("✅ Fulfilment rates updated in session!")
 
 
 def render_scenario_planning(data):
@@ -598,7 +638,7 @@ def render_scenario_planning(data):
             comparison['Variance'] = comparison['Scenario'] - comparison['Base']
             comparison['Var %'] = (comparison['Variance'] / comparison['Base'].abs() * 100).round(1)
 
-            st.dataframe(comparison, use_container_width=True)
+            st.dataframe(comparison, width="stretch")
         except Exception as e:
             st.warning(f"Unable to calculate detailed comparison: {e}")
 
@@ -671,7 +711,7 @@ def render_pl_view(data):
 
         st.dataframe(
             display_pl,
-            use_container_width=True,
+            width="stretch",
             height=600
         )
 

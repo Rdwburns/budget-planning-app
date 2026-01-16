@@ -32,14 +32,36 @@ class BudgetDataLoader:
                 new_cols.append(str(col))
         df.columns = new_cols
 
-        # Keep only relevant columns
+        # Map alternative column names to standard names
+        column_mapping = {}
+        for col in df.columns:
+            col_lower = col.lower().strip()
+            if 'margin' in col_lower and 'customer' in col_lower:
+                column_mapping[col] = 'Customer Margin'
+            elif col_lower == 'margin':
+                column_mapping[col] = 'Customer Margin'
+
+        if column_mapping:
+            df = df.rename(columns=column_mapping)
+
+        # Keep only relevant columns (use only those that exist)
         base_cols = ['Customer Name', 'Country', 'Country Group', 'Customer Margin', 'Last Year FY25 Revenue']
         date_cols = [c for c in df.columns if c.startswith('202')]
-        df = df[base_cols + date_cols].copy()
+
+        # Filter to only existing base columns
+        existing_base_cols = [c for c in base_cols if c in df.columns]
+        df = df[existing_base_cols + date_cols].copy()
 
         # Clean data
         df = df.dropna(subset=['Customer Name'])
-        df['Customer Margin'] = pd.to_numeric(df['Customer Margin'], errors='coerce').fillna(0)
+
+        # Handle Customer Margin if it exists
+        if 'Customer Margin' in df.columns:
+            df['Customer Margin'] = pd.to_numeric(df['Customer Margin'], errors='coerce').fillna(0)
+        else:
+            # Add column with 0 if it doesn't exist
+            df['Customer Margin'] = 0
+            print("Warning: 'Customer Margin' column not found in B2B data, defaulting to 0")
 
         # Convert all date columns to numeric
         for col in date_cols:
@@ -177,6 +199,52 @@ class BudgetDataLoader:
         return rates
 
 
+def validate_data(data: dict) -> list:
+    """Validate loaded data and return list of warnings"""
+    warnings = []
+
+    # Check B2B data
+    if 'b2b' in data and not data['b2b'].empty:
+        b2b = data['b2b']
+
+        # Check for expected columns
+        expected_b2b_cols = ['Customer Name', 'Country', 'Country Group']
+        missing_b2b = [c for c in expected_b2b_cols if c not in b2b.columns]
+        if missing_b2b:
+            warnings.append(f"B2B data missing columns: {', '.join(missing_b2b)}")
+
+        # Check for customer margin data
+        if 'Customer Margin' in b2b.columns:
+            if b2b['Customer Margin'].sum() == 0:
+                warnings.append("All B2B Customer Margins are 0 - check if margin data exists in Excel file")
+
+        # Check for revenue data
+        date_cols = [c for c in b2b.columns if c.startswith('202')]
+        if date_cols:
+            total_revenue = b2b[date_cols].sum().sum()
+            if total_revenue == 0:
+                warnings.append("No B2B revenue data found in date columns")
+
+    # Check overheads data
+    if 'overheads' in data and not data['overheads'].empty:
+        oh = data['overheads']
+        expected_oh_cols = ['Territory', 'Category']
+        missing_oh = [c for c in expected_oh_cols if c not in oh.columns]
+        if missing_oh:
+            warnings.append(f"Overheads data missing columns: {', '.join(missing_oh)}")
+
+    # Check DTC data
+    if 'dtc' in data:
+        if not data['dtc']:
+            warnings.append("No DTC territory data loaded - check if territory sheets exist in Excel")
+        else:
+            dtc_count = len(data['dtc'])
+            if dtc_count < 3:
+                warnings.append(f"Only {dtc_count} DTC territories loaded - expected at least 3")
+
+    return warnings
+
+
 def load_all_data(file_path: str) -> dict:
     """Load all data from the budget model"""
     loader = BudgetDataLoader(file_path)
@@ -199,5 +267,8 @@ def load_all_data(file_path: str) -> dict:
         dtc_data = loader.load_dtc_inputs(territory)
         if not dtc_data.empty:
             data['dtc'][territory] = dtc_data
+
+    # Validate data and store warnings
+    data['validation_warnings'] = validate_data(data)
 
     return data

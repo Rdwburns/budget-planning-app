@@ -256,11 +256,13 @@ class PLCalculator:
 
 def format_currency(val: float) -> str:
     """Format as currency"""
-    if pd.isna(val) or val == 0:
+    if pd.isna(val):
         return "-"
+    if val == 0:
+        return "£0"
     if val < 0:
-        return f"({abs(val):,.0f})"
-    return f"{val:,.0f}"
+        return f"(£{abs(val):,.0f})"
+    return f"£{val:,.0f}"
 
 
 def format_percentage(val: float) -> str:
