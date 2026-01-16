@@ -115,9 +115,9 @@ def render_sidebar():
                     temp_path = Path("/tmp/budget_upload.xlsx")
                     temp_path.write_bytes(uploaded_file.getvalue())
                     st.session_state.data = load_all_data(str(temp_path))
-            st.session_state.file_loaded = True
-            st.session_state.loaded_file_id = file_id
-            st.rerun()  # Refresh to show loaded data                
+                st.session_state.file_loaded = True
+                st.session_state.loaded_file_id = file_id
+                st.rerun()  # Refresh to show loaded data
         if st.session_state.get('file_loaded'):
             st.success("✅ Data loaded")
 
@@ -211,7 +211,7 @@ def render_dashboard(data):
 
     b2b = data['b2b'].copy()
     date_cols = [c for c in b2b.columns if c.startswith('202')]
-    b2b['Total Revenue'] = b2b[date_cols].sum(axis=1)
+    b2b['Total Revenue'] = b2b[date_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=1)
     top_customers = b2b.nlargest(10, 'Total Revenue')[['Customer Name', 'Country', 'Country Group', 'Total Revenue']]
     top_customers['Total Revenue'] = top_customers['Total Revenue'].apply(lambda x: f"£{x:,.0f}")
 
@@ -344,7 +344,7 @@ def render_b2b_management(data):
         filtered = filtered[filtered['Customer Name'].str.contains(search, case=False, na=False)]
 
     date_cols = [c for c in filtered.columns if c.startswith('202')]
-    filtered['Total'] = filtered[date_cols].sum(axis=1)
+    filtered['Total'] = filtered[date_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=1)
     filtered = filtered[filtered['Total'] >= min_revenue]
 
     # Summary stats

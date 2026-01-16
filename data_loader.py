@@ -41,6 +41,10 @@ class BudgetDataLoader:
         df = df.dropna(subset=['Customer Name'])
         df['Customer Margin'] = pd.to_numeric(df['Customer Margin'], errors='coerce').fillna(0)
 
+        # Convert all date columns to numeric
+        for col in date_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
         return df
 
     def load_overheads(self) -> pd.DataFrame:
@@ -63,6 +67,10 @@ class BudgetDataLoader:
         available_cols = [c for c in base_cols if c in df.columns] + date_cols
         df = df[available_cols].copy()
         df = df.dropna(subset=['Territory', 'Category'])
+
+        # Convert all date columns to numeric
+        for col in date_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         return df
 
@@ -88,6 +96,11 @@ class BudgetDataLoader:
             else:
                 new_cols.append(str(col))
         df.columns = new_cols
+
+        # Convert all date columns to numeric
+        date_cols = [c for c in df.columns if c.startswith('202')]
+        for col in date_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         return df
 
