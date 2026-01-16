@@ -1302,13 +1302,13 @@ def render_pl_view(data):
             height=600
         )
 
-        # Summary metrics
+        # Summary metrics - Calculate actual values from P&L data
         st.markdown("---")
-        st.markdown("### 📊 Key Metrics")
+        st.markdown("### 📊 Key Metrics (Calculated from P&L)")
 
         col1, col2, col3, col4 = st.columns(4)
 
-        # Get totals
+        # Get totals from actual P&L data
         date_cols = [c for c in pl.columns if c.startswith('202')]
 
         with col1:
@@ -1319,19 +1319,31 @@ def render_pl_view(data):
             if ('CM1', 'Total CM1') in pl.index:
                 total_cm1 = pl.loc[('CM1', 'Total CM1'), date_cols].sum()
                 cm1_pct = total_cm1 / total_rev * 100 if total_rev > 0 else 0
-                st.metric("CM1 %", f"{cm1_pct:.1f}%")
+                st.metric(
+                    "Contribution Margin 1",
+                    f"£{total_cm1/1e6:.1f}M",
+                    delta=f"{cm1_pct:.1f}% of revenue"
+                )
 
         with col3:
             if ('CM2', 'Total CM2') in pl.index:
                 total_cm2 = pl.loc[('CM2', 'Total CM2'), date_cols].sum()
                 cm2_pct = total_cm2 / total_rev * 100 if total_rev > 0 else 0
-                st.metric("CM2 %", f"{cm2_pct:.1f}%")
+                st.metric(
+                    "Contribution Margin 2",
+                    f"£{total_cm2/1e6:.1f}M",
+                    delta=f"{cm2_pct:.1f}% of revenue"
+                )
 
         with col4:
             if ('EBITDA', 'EBITDA') in pl.index:
                 ebitda = pl.loc[('EBITDA', 'EBITDA'), date_cols].sum()
-                ebitda_pct = ebitda / total_rev * 100 if total_rev > 0 else 0
-                st.metric("EBITDA %", f"{ebitda_pct:.1f}%")
+                ebitda_margin = ebitda / total_rev * 100 if total_rev > 0 else 0
+                st.metric(
+                    "EBITDA",
+                    f"£{ebitda/1e6:.1f}M",
+                    delta=f"{ebitda_margin:.1f}% margin"
+                )
 
         # Subscription Revenue Breakdown
         st.markdown("---")
