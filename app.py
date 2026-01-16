@@ -264,26 +264,27 @@ def render_dashboard(data):
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("#### By Territory Chart")
-            # DTC territory bar chart
-            import plotly.express as px
-            fig = px.bar(
-                dtc_territory_df,
-                x='Territory',
-                y='Revenue',
-                title='DTC Revenue Distribution',
-                color='Revenue',
-                color_continuous_scale='Blues'
-            )
-            fig.update_layout(showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            st.markdown("#### Territory Breakdown")
+            st.markdown("#### By Territory")
             # DTC territory table with formatting
             display_df = dtc_territory_df.copy()
             display_df['Revenue'] = display_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
             st.dataframe(display_df, hide_index=True, use_container_width=True)
+
+        with col2:
+            st.markdown("#### Monthly Trend")
+            # Aggregate DTC revenue across all territories by month
+            monthly_dtc = {}
+            for territory in dtc_territories:
+                territory_revenue = calc.calculate_dtc_revenue(territory)
+                for month, revenue in territory_revenue.items():
+                    monthly_dtc[month] = monthly_dtc.get(month, 0) + revenue
+
+            monthly_dtc_df = pd.DataFrame([
+                {'Month': k, 'Revenue': v}
+                for k, v in monthly_dtc.items()
+            ])
+            if not monthly_dtc_df.empty:
+                st.line_chart(monthly_dtc_df.set_index('Month')['Revenue'])
     else:
         st.info("No DTC revenue data available")
 
@@ -309,26 +310,27 @@ def render_dashboard(data):
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("#### By Territory Chart")
-            # Marketplace territory bar chart
-            import plotly.express as px
-            fig = px.bar(
-                marketplace_territory_df,
-                x='Territory',
-                y='Revenue',
-                title='Marketplace Revenue Distribution',
-                color='Revenue',
-                color_continuous_scale='Greens'
-            )
-            fig.update_layout(showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            st.markdown("#### Territory Breakdown")
+            st.markdown("#### By Territory")
             # Marketplace territory table with formatting
             display_df = marketplace_territory_df.copy()
             display_df['Revenue'] = display_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
             st.dataframe(display_df, hide_index=True, use_container_width=True)
+
+        with col2:
+            st.markdown("#### Monthly Trend")
+            # Aggregate Marketplace revenue across all territories by month
+            monthly_marketplace = {}
+            for territory in dtc_territories:
+                territory_revenue = calc.calculate_marketplace_revenue(territory)
+                for month, revenue in territory_revenue.items():
+                    monthly_marketplace[month] = monthly_marketplace.get(month, 0) + revenue
+
+            monthly_marketplace_df = pd.DataFrame([
+                {'Month': k, 'Revenue': v}
+                for k, v in monthly_marketplace.items()
+            ])
+            if not monthly_marketplace_df.empty:
+                st.line_chart(monthly_marketplace_df.set_index('Month')['Revenue'])
     else:
         st.info("No Marketplace revenue data available")
 
