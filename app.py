@@ -1145,21 +1145,89 @@ def render_scenario_planning(data):
         st.plotly_chart(fig, use_container_width=True)
 
     # Detailed P&L comparison
-    with st.expander("📊 Detailed P&L Comparison"):
+    st.markdown("---")
+    with st.expander("📊 Detailed P&L Comparison (Consolidated)", expanded=False):
         try:
-            base_pl = base_calc.calculate_territory_pl('UK')
-            new_pl = calc.calculate_territory_pl('UK')
+            # Calculate consolidated P&L across all territories
+            base_pl = base_calc.calculate_combined_pl()
+            new_pl = calc.calculate_combined_pl()
+
+            # Sum across all date columns for FY totals
+            date_cols = [c for c in base_pl.columns if c.startswith('202')]
 
             comparison = pd.DataFrame({
-                'Base': base_pl.iloc[:, :6].sum(axis=1),
-                'Scenario': new_pl.iloc[:, :6].sum(axis=1),
+                'Line Item': base_pl.index.get_level_values(1),
+                'Category': base_pl.index.get_level_values(0),
+                'Base (£)': base_pl[date_cols].sum(axis=1).values,
+                'Scenario (£)': new_pl[date_cols].sum(axis=1).values,
             })
-            comparison['Variance'] = comparison['Scenario'] - comparison['Base']
-            comparison['Var %'] = (comparison['Variance'] / comparison['Base'].abs() * 100).round(1)
 
-            st.dataframe(comparison, width="stretch")
+            comparison['Variance (£)'] = comparison['Scenario (£)'] - comparison['Base (£)']
+            comparison['Variance (%)'] = (
+                (comparison['Variance (£)'] / comparison['Base (£)'].abs() * 100)
+                .replace([float('inf'), -float('inf')], 0)
+                .fillna(0)
+                .round(1)
+            )
+
+            # Format currency columns
+            for col in ['Base (£)', 'Scenario (£)', 'Variance (£)']:
+                comparison[col] = comparison[col].apply(lambda x: f"£{x:,.0f}" if x >= 0 else f"(£{abs(x):,.0f})")
+
+            comparison['Variance (%)'] = comparison['Variance (%)'].apply(lambda x: f"{x:+.1f}%")
+
+            # Apply styling for better readability
+            def highlight_variance(row):
+                # Extract numeric value from formatted string
+                var_str = row['Variance (£)']
+                is_negative = var_str.startswith('(')
+
+                styles = [''] * len(row)
+
+                # Color the variance columns
+                if is_negative:
+                    styles[-2] = 'color: red'  # Variance (£)
+                    styles[-1] = 'color: red'  # Variance (%)
+                else:
+                    styles[-2] = 'color: green'  # Variance (£)
+                    styles[-1] = 'color: green'  # Variance (%)
+
+                # Bold total rows
+                if 'Total' in row['Line Item'] or 'EBITDA' in row['Line Item']:
+                    styles = [f'font-weight: bold; background-color: #f0f0f0' if s == '' else f'{s}; font-weight: bold; background-color: #f0f0f0' for s in styles]
+
+                return styles
+
+            styled_comparison = comparison.style.apply(highlight_variance, axis=1)
+
+            st.dataframe(styled_comparison, use_container_width=True, hide_index=True)
+
+            # Summary insights
+            st.markdown("---")
+            st.markdown("#### Key Insights")
+
+            col1, col2, col3 = st.columns(3)
+
+            # Extract EBITDA values
+            ebitda_rows = comparison[comparison['Line Item'].str.contains('EBITDA', na=False)]
+            if not ebitda_rows.empty:
+                base_ebitda_str = ebitda_rows['Base (£)'].iloc[0]
+                scenario_ebitda_str = ebitda_rows['Scenario (£)'].iloc[0]
+
+                with col1:
+                    st.info(f"**Base EBITDA:** {base_ebitda_str}")
+
+                with col2:
+                    st.info(f"**Scenario EBITDA:** {scenario_ebitda_str}")
+
+                with col3:
+                    variance_str = ebitda_rows['Variance (£)'].iloc[0]
+                    variance_pct = ebitda_rows['Variance (%)'].iloc[0]
+                    st.success(f"**EBITDA Impact:** {variance_str} ({variance_pct})")
+
         except Exception as e:
             st.warning(f"Unable to calculate detailed comparison: {e}")
+            st.error(f"Error details: {str(e)}")
 
     # Save scenario
     st.markdown("---")
