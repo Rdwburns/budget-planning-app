@@ -1037,21 +1037,37 @@ def render_cost_management(data):
 
     with tab3:
         st.markdown("### Fulfilment Rates")
+        st.caption("💡 Rates are displayed as percentages (e.g., 15.0% = 15% of revenue)")
 
         fulfilment = data['fulfilment'].copy()
 
+        # Convert decimal rates to percentages for display (multiply by 100)
+        # If rates are stored as 0.15, display as 15%
+        display_ful = fulfilment.copy()
+        if 'Rate' in display_ful.columns:
+            # Check if rates are in decimal form (< 1)
+            if display_ful['Rate'].abs().max() <= 1:
+                display_ful['Rate'] = display_ful['Rate'] * 100
+
         edited_ful = st.data_editor(
-            fulfilment,
+            display_ful,
             width="stretch",
             column_config={
-                "Rate": st.column_config.NumberColumn("Rate %", format="%.1f%%")
+                "Rate": st.column_config.NumberColumn("Rate %", format="%.1f%%", help="Fulfilment cost as % of revenue")
             },
             key="ful_editor"
         )
 
         if st.button("💾 Save Fulfilment Rates", key="save_fulfilment"):
+            # Convert percentages back to decimal form before saving (divide by 100)
+            saved_ful = edited_ful.copy()
+            if 'Rate' in saved_ful.columns:
+                # If the max value is > 1, it's in percentage form, convert back to decimal
+                if saved_ful['Rate'].abs().max() > 1:
+                    saved_ful['Rate'] = saved_ful['Rate'] / 100
+
             # Update session state with edited fulfilment rates
-            st.session_state.data['fulfilment'] = edited_ful
+            st.session_state.data['fulfilment'] = saved_ful
             st.success("✅ Fulfilment rates updated in session!")
 
 
