@@ -132,7 +132,7 @@ class BudgetDataLoader:
         return df
 
     def load_dtc_inputs(self, territory: str) -> pd.DataFrame:
-        """Load DTC input data for a specific territory"""
+        """Load DTC input data for a specific territory including subscription cohort data"""
         if territory not in self.territories or territory == 'ROW':
             return pd.DataFrame()
 
@@ -140,23 +140,42 @@ class BudgetDataLoader:
             wb = load_workbook(self.file_path, read_only=True, data_only=True)
             ws = wb[territory]
 
-            # Extract key metrics
+            # Extended metrics including subscription cohort data
             data = []
             metric_rows = {
+                # Traffic & Conversion
                 'Traffic': 4,
                 'Conversion Rate': 6,
-                'Total Orders': 13,
-                'New Customers': 9,
-                'New Subscription Customers': 10,
-                'Recurring Subscription Customers': 11,
-                'Returning Customers': 12,
+                'Total Orders': 7,
+
+                # Customer Segmentation
+                'New Customers (Non-Subs)': 8,
+                'New Subscription Customers': 9,
+                'Recurring Subscription Customers': 10,
+                'Returning Customers (Non-Subs)': 11,
+
+                # Revenue by Segment - Returning
+                'Returning AOV (Non-Subs)': 14,
+                'Returning Revenue (Non-Subs)': 15,
+                'Returning AOV (Subs)': 16,
+                'Returning Revenue (Subs)': 17,
+
+                # Revenue by Segment - New
+                'New Customer AOV (Non-Subs)': 19,
+                'New Customer Revenue (Non-Subs)': 20,
+                'New Customer AOV (Subs)': 21,
+                'New Customer Revenue (Subs)': 22,
+
+                # Totals & Adjustments
+                'Total Revenue': 24,
+                'Actual Revenue': 25,
+                'Missing Revenue (Cohort Adjustment)': 26,
                 'Marketing Budget': 36,
-                'Total Revenue': 25,
             }
 
             # Get month columns (starting from column 5)
             months = []
-            for col in range(5, min(30, ws.max_column + 1)):
+            for col in range(5, min(42, ws.max_column + 1)):  # Extended to capture more months
                 val = ws.cell(row=2, column=col).value
                 if val and isinstance(val, datetime):
                     months.append(val.strftime('%Y-%m'))
@@ -166,7 +185,14 @@ class BudgetDataLoader:
                 for i, month in enumerate(months):
                     col = 5 + i
                     val = ws.cell(row=row, column=col).value
-                    row_data[month] = val if val else 0
+                    # Handle numeric conversion
+                    if val is not None:
+                        try:
+                            row_data[month] = float(val)
+                        except (ValueError, TypeError):
+                            row_data[month] = 0
+                    else:
+                        row_data[month] = 0
                 data.append(row_data)
 
             wb.close()

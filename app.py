@@ -322,6 +322,61 @@ def render_revenue_inputs(data):
     else:
         st.info(f"No DTC data available for {territory}")
 
+    # Subscription Cohort Analysis
+    st.markdown("---")
+    st.markdown("### 📊 Subscription Cohort Analysis")
+
+    if territory in data.get('dtc', {}) and not data['dtc'][territory].empty:
+        dtc_df = data['dtc'][territory]
+
+        # Filter for subscription-related metrics
+        sub_metrics = [
+            'New Subscription Customers',
+            'Recurring Subscription Customers',
+            'Returning Revenue (Subs)',
+            'New Customer Revenue (Subs)',
+            'Missing Revenue (Cohort Adjustment)'
+        ]
+
+        sub_data = dtc_df[dtc_df['Metric'].isin(sub_metrics)]
+
+        if not sub_data.empty:
+            # Summary metrics
+            col1, col2, col3 = st.columns(3)
+
+            date_cols = [c for c in sub_data.columns if c.startswith('202')]
+
+            with col1:
+                new_subs = sub_data[sub_data['Metric'] == 'New Subscription Customers'][date_cols].sum(axis=1).values
+                new_subs_total = new_subs[0] if len(new_subs) > 0 else 0
+                st.metric("New Subs (FY)", f"{int(new_subs_total):,}")
+
+            with col2:
+                recurring = sub_data[sub_data['Metric'] == 'Recurring Subscription Customers'][date_cols].sum(axis=1).values
+                recurring_total = recurring[0] if len(recurring) > 0 else 0
+                st.metric("Recurring Subs (FY)", f"{int(recurring_total):,}")
+
+            with col3:
+                sub_rev = sub_data[sub_data['Metric'].isin(['Returning Revenue (Subs)', 'New Customer Revenue (Subs)'])][date_cols].sum().sum()
+                st.metric("Subscription Revenue", f"£{sub_rev:,.0f}")
+
+            # Cohort adjustment warning
+            cohort_adj = sub_data[sub_data['Metric'] == 'Missing Revenue (Cohort Adjustment)'][date_cols]
+            if not cohort_adj.empty:
+                total_adj = cohort_adj.sum().sum()
+                if abs(total_adj) > 1000:
+                    if total_adj < 0:
+                        st.warning(f"⚠️ Cohort adjustment: £{total_adj:,.0f} (revenue gap from prior cohort data)")
+                    else:
+                        st.info(f"ℹ️ Cohort adjustment: +£{total_adj:,.0f} (additional revenue from prior cohorts)")
+
+            # Show detailed table
+            with st.expander("View Subscription Cohort Details"):
+                display_sub = sub_data.set_index('Metric')
+                display_sub = display_sub.drop(columns=['Territory'], errors='ignore')
+                date_cols_display = [c for c in display_sub.columns if c.startswith('202')][:12]
+                st.dataframe(display_sub[date_cols_display], width="stretch")
+
     # Quick scenario adjustments
     st.markdown("---")
     st.markdown("### 🎛️ Quick Adjustments")
@@ -782,6 +837,49 @@ def render_pl_view(data):
                 ebitda = pl.loc[('EBITDA', 'EBITDA'), date_cols].sum()
                 ebitda_pct = ebitda / total_rev * 100 if total_rev > 0 else 0
                 st.metric("EBITDA %", f"{ebitda_pct:.1f}%")
+
+        # Subscription Revenue Breakdown
+        st.markdown("---")
+        st.markdown("### 📦 Subscription Revenue Breakdown")
+
+        if 'dtc' in data:
+            sub_summary = []
+            for terr, dtc_df in data['dtc'].items():
+                if dtc_df.empty:
+                    continue
+                date_cols_dtc = [c for c in dtc_df.columns if c.startswith('202')]
+
+                new_sub_rev = dtc_df[dtc_df['Metric'] == 'New Customer Revenue (Subs)'][date_cols_dtc].sum().sum()
+                recurring_rev = dtc_df[dtc_df['Metric'] == 'Returning Revenue (Subs)'][date_cols_dtc].sum().sum()
+                cohort_adj = dtc_df[dtc_df['Metric'] == 'Missing Revenue (Cohort Adjustment)'][date_cols_dtc].sum().sum()
+
+                sub_summary.append({
+                    'Territory': terr,
+                    'New Sub Revenue': new_sub_rev,
+                    'Recurring Sub Revenue': recurring_rev,
+                    'Cohort Adjustment': cohort_adj,
+                    'Total Sub Revenue': new_sub_rev + recurring_rev
+                })
+
+            if sub_summary:
+                sub_df = pd.DataFrame(sub_summary)
+
+                # Format currency columns
+                for col in ['New Sub Revenue', 'Recurring Sub Revenue', 'Cohort Adjustment', 'Total Sub Revenue']:
+                    sub_df[col] = sub_df[col].apply(lambda x: f"£{x:,.0f}" if x >= 0 else f"(£{abs(x):,.0f})")
+
+                st.dataframe(sub_df, width="stretch", hide_index=True)
+
+                # Total subscription impact
+                total_sub = sum([s['New Sub Revenue'] + s['Recurring Sub Revenue'] for s in sub_summary if isinstance(s['New Sub Revenue'], (int, float))])
+                total_cohort_adj = sum([s['Cohort Adjustment'] for s in sub_summary if isinstance(s['Cohort Adjustment'], (int, float))])
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Total Subscription Revenue", f"£{total_sub:,.0f}")
+                with col2:
+                    if abs(total_cohort_adj) > 1000:
+                        st.metric("Total Cohort Adjustment", f"£{total_cohort_adj:,.0f}")
 
     except Exception as e:
         st.error(f"Error calculating P&L: {e}")
