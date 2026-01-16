@@ -220,16 +220,18 @@ def render_dashboard(data):
 
     b2b = data['b2b'].copy()
 
-    # Filter out summary/total rows that appear in Excel exports
-    summary_terms = ['Revenue', 'Grand Total', 'Sub Total', 'CM1', 'CM2', 'Total', 'EBITDA', 'CoGS', 'Fulfilment']
-    b2b = b2b[~b2b['Customer Name'].str.contains('|'.join(summary_terms), case=False, na=False)]
-    b2b = b2b[b2b['Customer Name'].notna() & (b2b['Customer Name'].str.strip() != '')]
-
     date_cols = [c for c in b2b.columns if c.startswith('202')]
     b2b['Total Revenue'] = b2b[date_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=1)
 
+    # Filter out summary rows and region codes that appear as customer names
+    summary_terms = ['Revenue', 'Grand Total', 'Total', 'Subtotal', 'Sum', 'All Customers',
+                     'UK', 'CE', 'EE', 'ROW', 'CM1', 'CM2', 'EBITDA', 'CoGS', 'Fulfilment']
+    b2b_filtered = b2b[~b2b['Customer Name'].isin(summary_terms)]
+    b2b_filtered = b2b_filtered[b2b_filtered['Customer Name'].notna()]
+    b2b_filtered = b2b_filtered[b2b_filtered['Country'].notna()]  # Real customers have countries
+
     # Only show customers with revenue > 0
-    b2b = b2b[b2b['Total Revenue'] > 0]
+    b2b = b2b_filtered[b2b_filtered['Total Revenue'] > 0]
 
     top_customers = b2b.nlargest(10, 'Total Revenue')[['Customer Name', 'Country', 'Country Group', 'Total Revenue']]
 
