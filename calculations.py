@@ -79,6 +79,7 @@ class PLCalculator:
         if amazon.empty:
             return {d: 0 for d in self.dates}
 
+
         # Map territory codes to full names used in Amazon sheet
         territory_name_map = {
             'UK': 'UK',
@@ -87,10 +88,13 @@ class PLCalculator:
             'IT': 'Italy',
             'FR': 'France',
             'RO': 'Romania',
+            'PL': 'Poland',
             'CZ': 'Czech Republic',
             'HU': 'Hungary',
             'SK': 'Slovakia',
             'Other EU': 'Other EU',
+            'US': 'United States',
+            'AU': 'Australia',
             'ROW': 'Other RoW',
         }
 
@@ -123,6 +127,20 @@ class PLCalculator:
                 result[col] = val
             else:
                 result[col] = 0
+
+        return result
+
+    def calculate_total_marketplace_revenue(self) -> Dict[str, float]:
+        """Calculate total marketplace (Amazon) revenue across ALL territories"""
+        # All marketplace territories (codes used internally)
+        marketplace_territories = ['UK', 'FR', 'ES', 'DE', 'IT', 'RO', 'PL', 'CZ', 'SK', 'HU',
+                                'Other EU', 'US', 'AU', 'ROW']
+
+        result: Dict[str, float] = {d: 0.0 for d in self.dates}
+        for territory in marketplace_territories:
+            territory_rev = self.calculate_marketplace_revenue(territory)
+            for col in self.dates:
+                result[col] += territory_rev.get(col, 0.0)
 
         return result
 

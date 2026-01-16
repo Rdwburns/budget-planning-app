@@ -154,11 +154,8 @@ def render_dashboard(data):
         for territory in dtc_territories
     )
 
-    # Calculate Marketplace total across all territories
-    marketplace_total = sum(
-        sum(calc.calculate_marketplace_revenue(territory).values())
-        for territory in dtc_territories
-    )
+    # Calculate Marketplace total across ALL marketplace territories (includes FR, DE, US, etc.)
+    marketplace_total = sum(calc.calculate_total_marketplace_revenue().values())
 
     # Total revenue across ALL channels
     total_revenue = b2b_total + dtc_total + marketplace_total
