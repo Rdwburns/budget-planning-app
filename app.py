@@ -110,12 +110,11 @@ def render_sidebar():
             with st.spinner("Loading data..."):
                 # Save to temp location and load
                 temp_path = Path("/tmp/budget_upload.xlsx")
-                temp_path.write_bytes(uploaded_file.read())
+                temp_path.write_bytes(uploaded_file.getvalue())
                 st.session_state.data = load_all_data(str(temp_path))
                 st.session_state.file_loaded = True
                 st.success("Data loaded!")
-                st.rerun()
-
+                
         if st.session_state.get('file_loaded'):
             st.success("✅ Data loaded")
 
