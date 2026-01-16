@@ -288,8 +288,9 @@ def render_revenue_inputs(data):
         key='dtc_territory'
     )
 
-    if territory in data.get('dtc', {}):
-        dtc_data = data['dtc'][territory]
+    # Always use session state to preserve edits
+    if territory in st.session_state.data.get('dtc', {}):
+        dtc_data = st.session_state.data['dtc'][territory]
 
         st.markdown("### 📊 Key Metrics")
 
@@ -333,8 +334,9 @@ def render_revenue_inputs(data):
     st.markdown("---")
     st.markdown("### 📊 Subscription Cohort Analysis")
 
-    if territory in data.get('dtc', {}) and not data['dtc'][territory].empty:
-        dtc_df = data['dtc'][territory]
+    # Always use session state to preserve edits
+    if territory in st.session_state.data.get('dtc', {}) and not st.session_state.data['dtc'][territory].empty:
+        dtc_df = st.session_state.data['dtc'][territory]
 
         # Filter for subscription-related metrics
         sub_metrics = [
@@ -441,7 +443,8 @@ def render_b2b_management(data):
         st.warning("Please upload a budget file first")
         return
 
-    b2b = data['b2b'].copy()
+    # Always use session state to preserve edits across page changes
+    b2b = st.session_state.data['b2b'].copy()
 
     # Filters
     col1, col2, col3 = st.columns(3)
@@ -517,18 +520,16 @@ def render_b2b_management(data):
             # Remove the calculated 'Total' column before saving
             edited_b2b_clean = edited_b2b.drop(columns=['Total'], errors='ignore')
 
-            # Update the original b2b dataframe with edited values
+            # Update the session state b2b dataframe with edited values
             # Match by Customer Name and update
             for idx, row in edited_b2b_clean.iterrows():
                 customer_name = row['Customer Name']
-                mask = data['b2b']['Customer Name'] == customer_name
+                mask = st.session_state.data['b2b']['Customer Name'] == customer_name
                 for col in edited_b2b_clean.columns:
-                    if col in data['b2b'].columns:
-                        data['b2b'].loc[mask, col] = row[col]
+                    if col in st.session_state.data['b2b'].columns:
+                        st.session_state.data['b2b'].loc[mask, col] = row[col]
 
-            # Update session state
-            st.session_state.data['b2b'] = data['b2b']
-            st.success("✅ Changes saved to session! (Note: Changes are not persisted to Excel file)")
+            st.success("✅ Changes saved! Edits persist across page changes.")
 
     # Add new customer form
     st.markdown("---")
