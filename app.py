@@ -737,49 +737,109 @@ def render_revenue_inputs(data):
     # Quick scenario adjustments
     st.markdown("---")
     st.markdown("### 🎛️ Quick Adjustments")
+    st.caption("💡 Adjust key drivers to see immediate revenue impact")
 
-    col1, col2, col3 = st.columns(3)
+    # Calculate base values from actual territory data
+    if territory in st.session_state.data.get('dtc', {}):
+        dtc_df = st.session_state.data['dtc'][territory]
+        if not dtc_df.empty:
+            date_cols = [c for c in dtc_df.columns if c.startswith('202')]
 
-    with col1:
-        traffic_adj = st.slider(
-            "Traffic Growth %",
-            min_value=-50,
-            max_value=100,
-            value=0,
-            key=f"traffic_{territory}"
-        )
+            # Get base metrics
+            base_traffic = 0
+            traffic_row = dtc_df[dtc_df['Metric'] == 'Traffic']
+            if not traffic_row.empty:
+                base_traffic = traffic_row[date_cols].sum().sum()
 
-    with col2:
-        cvr_adj = st.slider(
-            "Conversion Rate Change %",
-            min_value=-50,
-            max_value=100,
-            value=0,
-            key=f"cvr_{territory}"
-        )
+            base_customers = 0
+            customers_row = dtc_df[dtc_df['Metric'] == 'New Customers']
+            if not customers_row.empty:
+                base_customers = customers_row[date_cols].sum().sum()
 
-    with col3:
-        aov_adj = st.slider(
-            "AOV Change %",
-            min_value=-30,
-            max_value=50,
-            value=0,
-            key=f"aov_{territory}"
-        )
+            base_revenue = 0
+            revenue_row = dtc_df[dtc_df['Metric'] == 'Total Revenue']
+            if not revenue_row.empty:
+                base_revenue = revenue_row[date_cols].sum().sum()
 
-    # Show projected impact
-    if any([traffic_adj, cvr_adj, aov_adj]):
-        st.markdown("### 📈 Projected Impact")
+            base_cvr = (base_customers / base_traffic * 100) if base_traffic > 0 else 0
+            base_aov = (base_revenue / base_customers) if base_customers > 0 else 0
 
-        base_rev = 100000  # Example base
-        new_rev = base_rev * (1 + traffic_adj/100) * (1 + cvr_adj/100) * (1 + aov_adj/100)
-        change = new_rev - base_rev
+            col1, col2, col3 = st.columns(3)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Base Revenue", f"£{base_rev:,.0f}")
-        with col2:
-            st.metric("Projected Revenue", f"£{new_rev:,.0f}", delta=f"£{change:,.0f}")
+            with col1:
+                st.info(f"**Base Traffic:** {int(base_traffic):,}")
+                traffic_adj = st.slider(
+                    "Traffic Growth %",
+                    min_value=-50,
+                    max_value=100,
+                    value=0,
+                    key=f"traffic_{territory}",
+                    help=f"Current: {int(base_traffic):,} visitors"
+                )
+
+            with col2:
+                st.info(f"**Base CVR:** {base_cvr:.2f}%")
+                cvr_adj = st.slider(
+                    "Conversion Rate Change %",
+                    min_value=-50,
+                    max_value=100,
+                    value=0,
+                    key=f"cvr_{territory}",
+                    help=f"Current: {base_cvr:.2f}%"
+                )
+
+            with col3:
+                st.info(f"**Base AOV:** £{base_aov:.0f}")
+                aov_adj = st.slider(
+                    "AOV Change %",
+                    min_value=-30,
+                    max_value=50,
+                    value=0,
+                    key=f"aov_{territory}",
+                    help=f"Current: £{base_aov:.0f}"
+                )
+
+            # Show projected impact
+            if any([traffic_adj, cvr_adj, aov_adj]):
+                st.markdown("---")
+                st.markdown("### 📈 Projected Impact")
+
+                # Calculate new values
+                new_traffic = base_traffic * (1 + traffic_adj/100)
+                new_cvr = base_cvr * (1 + cvr_adj/100)
+                new_aov = base_aov * (1 + aov_adj/100)
+
+                # Revenue calculation: Traffic × CVR × AOV
+                new_revenue = new_traffic * (new_cvr/100) * new_aov
+                revenue_change = new_revenue - base_revenue
+                revenue_change_pct = (revenue_change / base_revenue * 100) if base_revenue > 0 else 0
+
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    st.metric(
+                        "Base Revenue",
+                        f"£{base_revenue:,.0f}",
+                        delta=f"{territory} current FY total"
+                    )
+
+                with col2:
+                    st.metric(
+                        "Projected Revenue",
+                        f"£{new_revenue:,.0f}",
+                        delta=f"{revenue_change_pct:+.1f}%"
+                    )
+
+                with col3:
+                    st.metric(
+                        "Revenue Impact",
+                        f"£{abs(revenue_change):,.0f}",
+                        delta="increase" if revenue_change > 0 else "decrease"
+                    )
+        else:
+            st.info(f"No data available for {territory} - upload budget file to enable Quick Adjustments")
+    else:
+        st.info(f"No data available for {territory} - upload budget file to enable Quick Adjustments")
 
 
 def render_b2b_management(data):
