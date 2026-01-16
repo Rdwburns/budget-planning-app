@@ -79,21 +79,50 @@ class PLCalculator:
         if amazon.empty:
             return {d: 0 for d in self.dates}
 
-        # Get territory percentage allocation
-        territory_row = amazon[amazon.iloc[:, 0] == territory]
+        # Map territory codes to full names used in Amazon sheet
+        territory_name_map = {
+            'UK': 'UK',
+            'ES': 'Spain',
+            'DE': 'Germany',
+            'IT': 'Italy',
+            'FR': 'France',
+            'RO': 'Romania',
+            'CZ': 'Czech Republic',
+            'HU': 'Hungary',
+            'SK': 'Slovakia',
+            'Other EU': 'Other EU',
+            'ROW': 'Other RoW',
+        }
+
+        territory_name = territory_name_map.get(territory, territory)
+
+        # Find the "Territory £" section which has revenue values (not percentages)
+        # The revenue rows start after row 21 (Territory £ header)
+        territory_gbp_idx = amazon[amazon.iloc[:, 0] == 'Territory £'].index
+        if len(territory_gbp_idx) > 0:
+            start_idx = territory_gbp_idx[0] + 1
+            # Search in the revenue section (rows 22-35 approximately)
+            revenue_section = amazon.iloc[start_idx:start_idx+15]
+            territory_row = revenue_section[revenue_section.iloc[:, 0] == territory_name]
+        else:
+            # Fallback: search entire sheet
+            territory_row = amazon[amazon.iloc[:, 0] == territory_name]
+
         if territory_row.empty:
             return {d: 0 for d in self.dates}
 
-        # Get total Amazon revenue (row index ~2 based on structure)
-        total_row = amazon.iloc[1] if len(amazon) > 1 else None
-
         result = {}
         for col in self.dates:
-            if col in amazon.columns and total_row is not None:
-                total = float(total_row.get(col, 0) or 0)
-                pct = float(territory_row[col].iloc[0]) if col in territory_row.columns else 0
-                val = total * pct
+            if col in territory_row.columns:
+                val = territory_row[col].iloc[0]
+                # Handle None/NaN values
+                if pd.isna(val):
+                    val = 0
+                else:
+                    val = float(val)
                 result[col] = val
+            else:
+                result[col] = 0
 
         return result
 
