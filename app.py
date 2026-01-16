@@ -196,90 +196,7 @@ def render_dashboard(data):
 
     st.markdown("---")
 
-    # Revenue by Territory Group
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("📍 B2B Revenue by Region")
-
-        region_data = []
-        for group in ['UK', 'CE', 'EE', 'ROW']:
-            rev = calc.calculate_b2b_revenue(country_group=group)
-            total = sum(rev.values())
-            region_data.append({'Region': group, 'Revenue': total})
-
-        region_df = pd.DataFrame(region_data)
-        region_df['Revenue'] = region_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
-        st.dataframe(region_df, width="stretch", hide_index=True)
-
-    with col2:
-        st.subheader("📅 Monthly Trend")
-
-        # Show monthly B2B revenue
-        monthly = calc.calculate_b2b_revenue()
-        monthly_df = pd.DataFrame([
-            {'Month': k, 'Revenue': v}
-            for k, v in monthly.items()
-        ])
-        if not monthly_df.empty:
-            st.line_chart(monthly_df.set_index('Month')['Revenue'])
-
-    # Top B2B Customers
-    st.markdown("---")
-    st.subheader("🏆 Top 10 B2B Customers (FY)")
-
-    b2b = data['b2b'].copy()
-
-    date_cols = [c for c in b2b.columns if c.startswith('202')]
-    b2b['Total Revenue'] = b2b[date_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=1)
-
-    # Filter out summary rows and region codes that appear as customer names
-    summary_terms = ['Revenue', 'Grand Total', 'Total', 'Subtotal', 'Sum', 'All Customers',
-                     'UK', 'CE', 'EE', 'ROW', 'CM1', 'CM2', 'EBITDA', 'CoGS', 'Fulfilment']
-    b2b_filtered = b2b[~b2b['Customer Name'].isin(summary_terms)]
-    b2b_filtered = b2b_filtered[b2b_filtered['Customer Name'].notna()]
-    b2b_filtered = b2b_filtered[b2b_filtered['Country'].notna()]  # Real customers have countries
-
-    # Only show customers with revenue > 0
-    b2b_filtered = b2b_filtered[b2b_filtered['Total Revenue'] > 0]
-
-    # Group by Customer Name to avoid duplicates, summing revenue across all rows
-    b2b_grouped = b2b_filtered.groupby('Customer Name', as_index=False).agg({
-        'Total Revenue': 'sum',
-        'Country': 'first',  # Take first country if multiple
-        'Country Group': 'first'  # Take first country group if multiple
-    })
-
-    top_customers = b2b_grouped.nlargest(10, 'Total Revenue')[['Customer Name', 'Country', 'Country Group', 'Total Revenue']]
-
-    # Style the top customers table
-    def style_top_customers(df):
-        styled = df.style
-
-        # Add gradient to revenue column
-        styled = styled.background_gradient(
-            subset=['Total Revenue'],
-            cmap='Greens',
-            vmin=df['Total Revenue'].min(),
-            vmax=df['Total Revenue'].max()
-        )
-
-        # Format revenue as currency
-        styled = styled.format({'Total Revenue': '£{:,.0f}'})
-
-        # Bold the top 3 customers
-        def bold_top_3(s):
-            is_top_3 = [True if i < 3 else False for i in range(len(s))]
-            return ['font-weight: bold' if v else '' for v in is_top_3]
-
-        styled = styled.apply(bold_top_3, axis=0)
-
-        return styled
-
-    st.dataframe(style_top_customers(top_customers), width='stretch', hide_index=True)
-
     # Channel Mix Visualization
-    st.markdown("---")
     st.subheader("📊 Revenue by Channel")
 
     col1, col2 = st.columns(2)
@@ -410,6 +327,91 @@ def render_dashboard(data):
             st.dataframe(display_df, hide_index=True, use_container_width=True)
     else:
         st.info("No Marketplace revenue data available")
+
+    # B2B Revenue by Region and Monthly Trend
+    st.markdown("---")
+    st.subheader("📍 B2B Revenue by Region")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### By Region")
+
+        region_data = []
+        for group in ['UK', 'CE', 'EE', 'ROW']:
+            rev = calc.calculate_b2b_revenue(country_group=group)
+            total = sum(rev.values())
+            region_data.append({'Region': group, 'Revenue': total})
+
+        region_df = pd.DataFrame(region_data)
+        region_df['Revenue'] = region_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
+        st.dataframe(region_df, width="stretch", hide_index=True)
+
+    with col2:
+        st.markdown("#### Monthly Trend")
+
+        # Show monthly B2B revenue
+        monthly = calc.calculate_b2b_revenue()
+        monthly_df = pd.DataFrame([
+            {'Month': k, 'Revenue': v}
+            for k, v in monthly.items()
+        ])
+        if not monthly_df.empty:
+            st.line_chart(monthly_df.set_index('Month')['Revenue'])
+
+    # Top B2B Customers
+    st.markdown("---")
+    st.subheader("🏆 Top 10 B2B Customers (FY)")
+
+    b2b = data['b2b'].copy()
+
+    date_cols = [c for c in b2b.columns if c.startswith('202')]
+    b2b['Total Revenue'] = b2b[date_cols].apply(pd.to_numeric, errors='coerce').fillna(0).sum(axis=1)
+
+    # Filter out summary rows and region codes that appear as customer names
+    summary_terms = ['Revenue', 'Grand Total', 'Total', 'Subtotal', 'Sum', 'All Customers',
+                     'UK', 'CE', 'EE', 'ROW', 'CM1', 'CM2', 'EBITDA', 'CoGS', 'Fulfilment']
+    b2b_filtered = b2b[~b2b['Customer Name'].isin(summary_terms)]
+    b2b_filtered = b2b_filtered[b2b_filtered['Customer Name'].notna()]
+    b2b_filtered = b2b_filtered[b2b_filtered['Country'].notna()]  # Real customers have countries
+
+    # Only show customers with revenue > 0
+    b2b_filtered = b2b_filtered[b2b_filtered['Total Revenue'] > 0]
+
+    # Group by Customer Name to avoid duplicates, summing revenue across all rows
+    b2b_grouped = b2b_filtered.groupby('Customer Name', as_index=False).agg({
+        'Total Revenue': 'sum',
+        'Country': 'first',  # Take first country if multiple
+        'Country Group': 'first'  # Take first country group if multiple
+    })
+
+    top_customers = b2b_grouped.nlargest(10, 'Total Revenue')[['Customer Name', 'Country', 'Country Group', 'Total Revenue']]
+
+    # Style the top customers table
+    def style_top_customers(df):
+        styled = df.style
+
+        # Add gradient to revenue column
+        styled = styled.background_gradient(
+            subset=['Total Revenue'],
+            cmap='Greens',
+            vmin=df['Total Revenue'].min(),
+            vmax=df['Total Revenue'].max()
+        )
+
+        # Format revenue as currency
+        styled = styled.format({'Total Revenue': '£{:,.0f}'})
+
+        # Bold the top 3 customers
+        def bold_top_3(s):
+            is_top_3 = [True if i < 3 else False for i in range(len(s))]
+            return ['font-weight: bold' if v else '' for v in is_top_3]
+
+        styled = styled.apply(bold_top_3, axis=0)
+
+        return styled
+
+    st.dataframe(style_top_customers(top_customers), width='stretch', hide_index=True)
 
 
 def render_revenue_inputs(data):
