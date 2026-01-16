@@ -447,29 +447,62 @@ def render_revenue_inputs(data):
             date_cols = [c for c in display_df.columns if c.startswith('202')]
             display_df = display_df[date_cols[:12]]  # Show first 12 months
 
-            # Show formatted view
-            st.markdown("#### 📋 Current Values (Formatted)")
-            styled_df = style_revenue_inputs(display_df)
-            st.dataframe(styled_df, width="stretch")
+            # Define which metrics are editable (base inputs) vs calculated (outputs)
+            editable_metrics = [
+                'Traffic',
+                'Marketing Budget',
+                'Conversion Rate',
+                'New Customers',
+                'New Subscription Customers',
+                'Recurring Subscription Customers',
+                'Returning Customers'
+            ]
 
-            # Show editable version
-            st.markdown("#### ✏️ Edit Values")
-            st.caption("💡 Format guide: Currency (£1,234), Percentage (15.5), Numbers (1,234)")
+            calculated_metrics = [
+                'Total Revenue',
+                'New Customer Revenue',
+                'Returning Revenue',
+                'New Customer Revenue (Subs)',
+                'Returning Revenue (Subs)',
+                'Total Orders',
+                'Missing Revenue (Cohort Adjustment)'
+            ]
 
-            edited_df = st.data_editor(
-                display_df,
-                width="stretch",
-                num_rows="fixed",
-                key=f"dtc_editor_{territory}"
-            )
+            # Separate editable and calculated metrics
+            editable_df = display_df[display_df.index.isin(editable_metrics)]
+            calculated_df = display_df[display_df.index.isin(calculated_metrics)]
 
-            if st.button("💾 Save Changes", key=f"save_dtc_{territory}"):
-                # Update session state with edited DTC data
-                # Reconstruct the full dataframe with the metric names
-                updated_dtc = edited_df.copy()
-                updated_dtc['Territory'] = territory
-                st.session_state.data['dtc'][territory] = updated_dtc
-                st.success(f"✅ Changes saved for {territory} in session!")
+            # Show editable inputs
+            if not editable_df.empty:
+                st.markdown("#### ✏️ Editable Inputs")
+                st.caption("💡 Edit these base inputs to drive your revenue model")
+
+                edited_df = st.data_editor(
+                    editable_df,
+                    width="stretch",
+                    num_rows="fixed",
+                    key=f"dtc_editor_{territory}"
+                )
+
+                if st.button("💾 Save Changes", key=f"save_dtc_{territory}"):
+                    # Update session state with edited DTC data
+                    # Merge edited inputs back with calculated metrics
+                    full_df = pd.concat([edited_df, calculated_df])
+                    full_df['Territory'] = territory
+                    full_df = full_df.reset_index()
+
+                    # Update session state
+                    st.session_state.data['dtc'][territory] = full_df
+                    st.success(f"✅ Changes saved for {territory}!")
+
+            # Show calculated outputs (read-only)
+            if not calculated_df.empty:
+                st.markdown("#### 📊 Calculated Outputs (Read-only)")
+                st.caption("These values are automatically calculated from your inputs above")
+
+                # Apply styling for better visualization
+                styled_df = style_revenue_inputs(calculated_df)
+                st.dataframe(styled_df, width="stretch")
     else:
         st.info(f"No DTC data available for {territory}")
 
