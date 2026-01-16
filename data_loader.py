@@ -224,13 +224,16 @@ class BudgetDataLoader:
             return pd.DataFrame()
 
     def get_date_columns(self) -> list:
-        """Get list of date columns from the model"""
+        """Get list of FY27 date columns from the model"""
         df = pd.read_excel(self.file_path, sheet_name='B2B', header=5, nrows=1)
-        dates = []
+        all_dates = []
         for col in df.columns:
             if isinstance(col, datetime):
-                dates.append(col.strftime('%Y-%m'))
-        return dates
+                all_dates.append(col.strftime('%Y-%m'))
+
+        # Filter to FY27 period only (2026-02 to 2027-01)
+        fy27_dates = [d for d in all_dates if self.fy27_start <= d <= self.fy27_end]
+        return fy27_dates
 
     def load_cogs_rates(self) -> dict:
         """Load CoGS rates from UK P&L (used as defaults)"""
