@@ -231,9 +231,16 @@ def render_dashboard(data):
     b2b_filtered = b2b_filtered[b2b_filtered['Country'].notna()]  # Real customers have countries
 
     # Only show customers with revenue > 0
-    b2b = b2b_filtered[b2b_filtered['Total Revenue'] > 0]
+    b2b_filtered = b2b_filtered[b2b_filtered['Total Revenue'] > 0]
 
-    top_customers = b2b.nlargest(10, 'Total Revenue')[['Customer Name', 'Country', 'Country Group', 'Total Revenue']]
+    # Group by Customer Name to avoid duplicates, summing revenue across all rows
+    b2b_grouped = b2b_filtered.groupby('Customer Name', as_index=False).agg({
+        'Total Revenue': 'sum',
+        'Country': 'first',  # Take first country if multiple
+        'Country Group': 'first'  # Take first country group if multiple
+    })
+
+    top_customers = b2b_grouped.nlargest(10, 'Total Revenue')[['Customer Name', 'Country', 'Country Group', 'Total Revenue']]
 
     # Style the top customers table
     def style_top_customers(df):
