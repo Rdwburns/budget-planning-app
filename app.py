@@ -114,7 +114,7 @@ def render_sidebar():
                     # Save to temp location and load
                     temp_path = Path("/tmp/budget_upload.xlsx")
                     temp_path.write_bytes(uploaded_file.getvalue())
-            st.session_state.data = load_all_data(str(temp_path))
+                    st.session_state.data = load_all_data(str(temp_path))
             st.session_state.file_loaded = True
             st.session_state.loaded_file_id = file_id
             st.rerun()  # Refresh to show loaded data                
