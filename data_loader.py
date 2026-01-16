@@ -65,26 +65,18 @@ class BudgetDataLoader:
         # Clean data
         df = df.dropna(subset=['Customer Name'])
 
-        # Separate revenue rows from cost rows
-        # Revenue rows: Customer Margin is blank/NaN
-        # Cost rows: Customer Margin has string values like "Retros", "Rebates", etc.
-        # Aggregation rows: Customer Name contains summary terms
+        # Filter to actual customer revenue rows only:
+        # 1. Revenue rows have Customer Margin = NaN (cost rows have string values like "Retros")
+        # 2. Actual customers have valid Country AND Country Group (aggregation rows have NaN)
         if 'Customer Margin' in df.columns:
-            # Keep only revenue rows (where Customer Margin is blank/NaN or numeric 0)
-            # Cost rows have string values in Customer Margin column
-            margin_is_numeric = pd.to_numeric(df['Customer Margin'], errors='coerce').notna()
-            margin_is_zero_or_nan = pd.to_numeric(df['Customer Margin'], errors='coerce').fillna(0) == 0
-            df = df[margin_is_zero_or_nan | margin_is_numeric]
-            df['Customer Margin'] = pd.to_numeric(df['Customer Margin'], errors='coerce').fillna(0)
-        else:
-            df['Customer Margin'] = 0
-            print("Warning: 'Customer Margin' column not found in B2B data, defaulting to 0")
+            # Keep only revenue rows (Customer Margin is NaN)
+            df = df[df['Customer Margin'].isna()]
 
-        # Filter out aggregation rows (contain summary terms)
-        summary_terms = ['Total', 'Grand Total', 'Sub Total', 'Sum', 'CM1', 'CM2', 'CM3',
-                        'EBITDA', 'CoGS', 'Fulfilment', 'Revenue', 'All Customers']
-        for term in summary_terms:
-            df = df[~df['Customer Name'].str.contains(term, case=False, na=False)]
+        # Keep only rows with valid Country AND Country Group (filters out aggregation rows)
+        df = df[(df['Country'].notna()) & (df['Country Group'].notna())]
+
+        # Set Customer Margin to 0 for revenue rows
+        df['Customer Margin'] = 0
 
         # Convert all date columns to numeric
         for col in date_cols:
@@ -202,7 +194,7 @@ class BudgetDataLoader:
                 'Total Revenue': 25,  # CRITICAL FIX: was 24 (formula cell) - now uses Actual Revenue row
                 'Actual Revenue': 25,
                 'Missing Revenue (Cohort Adjustment)': 27,  # Fixed: was 26
-                'Marketing Budget': 29,  # Fixed: was 36
+                'Marketing Budget': 36,  # Row 36 is the actual Marketing Budget total
             }
 
             # Get month columns (starting from column 5)
@@ -327,7 +319,7 @@ def load_all_data(file_path: str) -> dict:
 
     # Load DTC data for each territory
     data['dtc'] = {}
-    for territory in ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK']:
+    for territory in ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']:
         dtc_data = loader.load_dtc_inputs(territory)
         if not dtc_data.empty:
             data['dtc'][territory] = dtc_data

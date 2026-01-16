@@ -148,7 +148,7 @@ def render_dashboard(data):
     b2b_total = sum(calc.calculate_b2b_revenue().values())
 
     # Calculate DTC total across all territories
-    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK']
+    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
     dtc_total = sum(
         sum(calc.calculate_dtc_revenue(territory).values())
         for territory in dtc_territories
@@ -315,12 +315,8 @@ def render_dashboard(data):
 
         with col2:
             st.markdown("#### Monthly Trend")
-            # Aggregate Marketplace revenue across all territories by month
-            monthly_marketplace = {}
-            for territory in dtc_territories:
-                territory_revenue = calc.calculate_marketplace_revenue(territory)
-                for month, revenue in territory_revenue.items():
-                    monthly_marketplace[month] = monthly_marketplace.get(month, 0) + revenue
+            # Use total marketplace revenue across ALL territories (not just DTC territories)
+            monthly_marketplace = calc.calculate_total_marketplace_revenue()
 
             monthly_marketplace_df = pd.DataFrame([
                 {'Month': k, 'Revenue': v}
@@ -432,7 +428,7 @@ def render_revenue_inputs(data):
     # Persistent Summary Bar - Aggregate metrics across all territories
     st.markdown("### 📊 DTC Summary (All Territories)")
 
-    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK']
+    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
     total_revenue = 0
     total_marketing = 0
     total_customers = 0
@@ -505,7 +501,7 @@ def render_revenue_inputs(data):
     # Territory selector
     territory = st.selectbox(
         "Select Territory",
-        ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK'],
+        ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU'],
         key='dtc_territory'
     )
 
@@ -1143,7 +1139,7 @@ def render_scenario_planning(data):
     base_calc = PLCalculator(data, {})
 
     # Calculate all channel revenues
-    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK']
+    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
 
     # Base case
     base_b2b = sum(base_calc.calculate_b2b_revenue().values())
