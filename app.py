@@ -487,20 +487,26 @@ def render_b2b_management(data):
     # Editable table
     st.markdown("### 📝 Customer Forecasts")
 
-    display_cols = ['Customer Name', 'Country', 'Country Group', 'Customer Margin'] + date_cols[:6] + ['Total']
+    display_cols = ['Customer Name', 'Country', 'Country Group'] + date_cols[:6] + ['Total']
     display_df = filtered[display_cols].copy()
+
+    # Build column config with currency formatting for date columns
+    column_config = {
+        "Customer Name": st.column_config.TextColumn("Customer", width="medium"),
+        "Country": st.column_config.TextColumn("Country", width="small"),
+        "Country Group": st.column_config.SelectboxColumn("Region", options=['UK', 'CE', 'EE', 'ROW']),
+        "Total": st.column_config.NumberColumn("Total", format="£%.0f", disabled=True),
+    }
+
+    # Add currency formatting for all date columns
+    for col in date_cols[:6]:
+        column_config[col] = st.column_config.NumberColumn(col, format="£%.0f")
 
     edited_b2b = st.data_editor(
         display_df,
         width="stretch",
         num_rows="dynamic",
-        column_config={
-            "Customer Name": st.column_config.TextColumn("Customer", width="medium"),
-            "Country": st.column_config.TextColumn("Country", width="small"),
-            "Country Group": st.column_config.SelectboxColumn("Region", options=['UK', 'CE', 'EE', 'ROW']),
-            "Customer Margin": st.column_config.NumberColumn("Margin", format="£%.0f"),
-            "Total": st.column_config.NumberColumn("Total", format="£%.0f", disabled=True),
-        },
+        column_config=column_config,
         key="b2b_editor"
     )
 
@@ -589,10 +595,16 @@ def render_cost_management(data):
         date_cols = [c for c in filtered_oh.columns if c.startswith('202')]
         display_cols = ['Territory', 'Function', 'Category', 'Supplier'] + date_cols[:6]
 
+        # Build column config with currency formatting for date columns
+        oh_column_config = {}
+        for col in date_cols[:6]:
+            oh_column_config[col] = st.column_config.NumberColumn(col, format="£%.0f")
+
         st.data_editor(
             filtered_oh[display_cols],
             width="stretch",
             num_rows="dynamic",
+            column_config=oh_column_config,
             key="oh_editor"
         )
 
