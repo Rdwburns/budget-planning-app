@@ -548,14 +548,43 @@ def render_revenue_inputs(data):
             # Show editable inputs
             if not editable_df.empty:
                 st.markdown("#### ✏️ Editable Inputs")
-                st.caption("💡 Edit these base inputs to drive your revenue model")
 
-                edited_df = st.data_editor(
-                    editable_df,
-                    width="stretch",
-                    num_rows="fixed",
-                    key=f"dtc_editor_{territory}"
-                )
+                # Add toggle for table orientation
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    table_view = st.radio(
+                        "View by:",
+                        ["By Metric", "By Month"],
+                        key=f"table_view_{territory}",
+                        horizontal=True
+                    )
+
+                with col2:
+                    if table_view == "By Metric":
+                        st.caption("💡 Metrics as rows, dates as columns (default)")
+                    else:
+                        st.caption("💡 Dates as rows, metrics as columns (easier for month-by-month editing)")
+
+                # Display table based on selected view
+                if table_view == "By Metric":
+                    # Default view: metrics as rows, dates as columns
+                    edited_df = st.data_editor(
+                        editable_df,
+                        width="stretch",
+                        num_rows="fixed",
+                        key=f"dtc_editor_metric_{territory}"
+                    )
+                else:
+                    # Transposed view: dates as rows, metrics as columns
+                    transposed_df = editable_df.T
+                    edited_transposed = st.data_editor(
+                        transposed_df,
+                        width="stretch",
+                        num_rows="fixed",
+                        key=f"dtc_editor_month_{territory}"
+                    )
+                    # Transpose back for saving
+                    edited_df = edited_transposed.T
 
                 if st.button("💾 Save Changes", key=f"save_dtc_{territory}"):
                     # Update session state with edited DTC data
