@@ -264,13 +264,14 @@ def render_dashboard(data):
         col1, col2 = st.columns(2)
 
         with col1:
+            st.markdown("#### By Territory Chart")
             # DTC territory bar chart
             import plotly.express as px
             fig = px.bar(
                 dtc_territory_df,
                 x='Territory',
                 y='Revenue',
-                title='DTC Revenue by Territory',
+                title='DTC Revenue Distribution',
                 color='Revenue',
                 color_continuous_scale='Blues'
             )
@@ -278,6 +279,7 @@ def render_dashboard(data):
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
+            st.markdown("#### Territory Breakdown")
             # DTC territory table with formatting
             display_df = dtc_territory_df.copy()
             display_df['Revenue'] = display_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
@@ -307,13 +309,14 @@ def render_dashboard(data):
         col1, col2 = st.columns(2)
 
         with col1:
+            st.markdown("#### By Territory Chart")
             # Marketplace territory bar chart
             import plotly.express as px
             fig = px.bar(
                 marketplace_territory_df,
                 x='Territory',
                 y='Revenue',
-                title='Marketplace Revenue by Territory',
+                title='Marketplace Revenue Distribution',
                 color='Revenue',
                 color_continuous_scale='Greens'
             )
@@ -321,6 +324,7 @@ def render_dashboard(data):
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
+            st.markdown("#### Territory Breakdown")
             # Marketplace territory table with formatting
             display_df = marketplace_territory_df.copy()
             display_df['Revenue'] = display_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
