@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.10 - Add full P&L structure (Marketing, CM3, Other Overheads breakdown, Other Expenses)
-__version__ = "1.0.10"
+# Version: 1.0.11 - Fix group overheads handling for new P&L structure
+__version__ = "1.0.11"
 
 @dataclass
 class PLLineItem:
@@ -551,25 +551,68 @@ class PLCalculator:
             ]
 
             if not group_overheads.empty:
-                group_oh_values = {}
+                # Split group overheads into Marketing and Other Overheads based on Category
+                group_marketing_values = {}
+                group_other_oh_values = {}
+
+                # Marketing categories
+                marketing_categories = [
+                    'D2C Model Marketing', 'D2C Model Brand', 'Paid Social', 'Paid Search/App',
+                    'Retros', 'Promo Cards', 'Trade Shows', 'Marketplace Marketing', 'TikTok Marketing'
+                ]
+
                 for col in self.dates:
                     if col in group_overheads.columns:
-                        val = pd.to_numeric(group_overheads[col], errors='coerce').sum()
-                        group_oh_values[col] = val
+                        # Calculate marketing
+                        if 'Category' in group_overheads.columns:
+                            group_marketing = group_overheads[group_overheads['Category'].isin(marketing_categories)]
+                            group_marketing_values[col] = pd.to_numeric(group_marketing[col], errors='coerce').sum()
 
-                # Add to combined overheads
-                if ('Overheads', 'Overheads') in combined.index:
+                            # Calculate other overheads (everything except marketing and other expenses)
+                            group_other = group_overheads[
+                                ~group_overheads['Category'].isin(marketing_categories + ['Other Expenses'])
+                            ]
+                            group_other_oh_values[col] = pd.to_numeric(group_other[col], errors='coerce').sum()
+                        else:
+                            # If no Category column, assume all are other overheads
+                            group_marketing_values[col] = 0
+                            group_other_oh_values[col] = pd.to_numeric(group_overheads[col], errors='coerce').sum()
+
+                # Add group marketing to Total Marketing
+                if ('Marketing', 'Total Marketing') in combined.index:
                     for col in self.dates:
                         if col in combined.columns:
-                            combined.loc[('Overheads', 'Overheads'), col] += group_oh_values.get(col, 0)
+                            combined.loc[('Marketing', 'Total Marketing'), col] += group_marketing_values.get(col, 0)
 
-                # Recalculate EBITDA with new overheads
-                if ('CM2', 'Total CM2') in combined.index and ('EBITDA', 'EBITDA') in combined.index:
+                # Add group other overheads to Total Other Overheads
+                if ('Other Overheads', 'Total Other Overheads') in combined.index:
+                    for col in self.dates:
+                        if col in combined.columns:
+                            combined.loc[('Other Overheads', 'Total Other Overheads'), col] += group_other_oh_values.get(col, 0)
+
+                # Recalculate CM3 (CM2 - Marketing)
+                if ('CM2', 'Total CM2') in combined.index and ('CM3', 'Total CM3') in combined.index and ('Marketing', 'Total Marketing') in combined.index:
                     for col in self.dates:
                         if col in combined.columns:
                             cm2 = combined.loc[('CM2', 'Total CM2'), col]
-                            overheads = combined.loc[('Overheads', 'Overheads'), col]
-                            combined.loc[('EBITDA', 'EBITDA'), col] = cm2 + overheads
+                            marketing = combined.loc[('Marketing', 'Total Marketing'), col]
+                            combined.loc[('CM3', 'Total CM3'), col] = cm2 + marketing  # Marketing is negative
+
+                # Recalculate EBITDA (CM3 - Other Overheads)
+                if ('CM3', 'Total CM3') in combined.index and ('EBITDA', 'EBITDA') in combined.index and ('Other Overheads', 'Total Other Overheads') in combined.index:
+                    for col in self.dates:
+                        if col in combined.columns:
+                            cm3 = combined.loc[('CM3', 'Total CM3'), col]
+                            other_overheads = combined.loc[('Other Overheads', 'Total Other Overheads'), col]
+                            combined.loc[('EBITDA', 'EBITDA'), col] = cm3 + other_overheads  # Other Overheads are negative
+
+                # Recalculate Final Result (EBITDA - Other Expenses)
+                if ('EBITDA', 'EBITDA') in combined.index and ('Final', 'Final Result') in combined.index and ('Other Expenses', 'Other Expenses') in combined.index:
+                    for col in self.dates:
+                        if col in combined.columns:
+                            ebitda = combined.loc[('EBITDA', 'EBITDA'), col]
+                            other_expenses = combined.loc[('Other Expenses', 'Other Expenses'), col]
+                            combined.loc[('Final', 'Final Result'), col] = ebitda + other_expenses  # Other Expenses are negative
 
         return combined
 

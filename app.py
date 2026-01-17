@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #e67e22; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #16a085; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '🟠 Version 1.0.10 - Full P&L Structure'
+            '🟢 Version 1.0.11 - Fixed'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1661,19 +1661,17 @@ def render_pl_view(data):
     # Show diagnostic info in an expander
     with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=True):
         st.write(f"**pl_calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.10")
+        st.write(f"**Expected version**: 1.0.11")
 
-        if calc_version == "1.0.10":
-            st.success("✅ Version 1.0.10 loaded - Full P&L structure with Marketing and CM3 deployed")
+        if calc_version == "1.0.11":
+            st.success("✅ Version 1.0.11 loaded - Full P&L structure with group overheads fix")
             st.info("P&L now includes Marketing breakdown, CM3, Other Overheads breakdown, and Other Expenses. EBITDA should now match Excel!")
+        elif calc_version == "1.0.10":
+            st.error("⚠️ Version 1.0.10 - Has bug with group overheads. Need 1.0.11.")
         elif calc_version == "1.0.9":
-            st.warning("⚠️ Version 1.0.9 - Missing Marketing breakdown and CM3. Need 1.0.10 for complete P&L structure.")
-        elif calc_version == "1.0.8":
-            st.warning("⚠️ Version 1.0.8 - Old structure, need 1.0.10")
-        elif calc_version == "1.0.7":
-            st.warning("⚠️ Version 1.0.7 - Old structure, need 1.0.10")
+            st.warning("⚠️ Version 1.0.9 - Missing Marketing breakdown and CM3. Need 1.0.11 for complete P&L structure.")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.10, got {calc_version}")
+            st.error(f"❌ Wrong version! Expected 1.0.11, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")
