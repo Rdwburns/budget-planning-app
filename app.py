@@ -12,7 +12,7 @@ from datetime import datetime
 
 # Import our modules
 from data_loader import load_all_data, BudgetDataLoader
-from calculations import PLCalculator, format_currency, format_percentage
+from pl_calculations import PLCalculator, format_currency, format_percentage
 from features_phase1 import (
     render_comments_system,
     render_assumptions_register,
@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #e74c3c; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #9b59b6; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '🔄 Version 1.0.2 - Force Redeploy (P&L Fix)'
+            '⚡ Version 1.0.3 - File Rename Fix'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1648,10 +1648,10 @@ def render_pl_view(data):
 
     # Calculate and display P&L
     # Force reload of calculations module to bypass cache
-    import calculations
+    import pl_calculations as calculations
     import importlib
     importlib.reload(calculations)
-    from calculations import PLCalculator
+    from pl_calculations import PLCalculator
 
     calc = PLCalculator(data)
 
@@ -1660,14 +1660,18 @@ def render_pl_view(data):
 
     # Show diagnostic info in an expander
     with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=False):
-        st.write(f"**calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.2")
+        st.write(f"**pl_calculations.py version**: {calc_version}")
+        st.write(f"**Expected version**: 1.0.3")
+        st.write(f"**NOTE**: Renamed from calculations.py to force Streamlit Cloud to reload")
 
-        if calc_version == "1.0.2":
-            st.success("✅ Correct version loaded")
+        if calc_version == "1.0.3":
+            st.success("✅ Correct version loaded - Territory fix deployed!")
+            st.info("P&L should now show £23.4M total revenue")
+        elif calc_version == "1.0.2" or calc_version == "1.0.1":
+            st.error(f"❌ OLD version still cached! Expected 1.0.3, got {calc_version}")
+            st.warning("Streamlit Cloud is still loading the old calculations.py file")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.2, got {calc_version}")
-            st.warning("This explains why P&L shows £17.6M instead of £23.4M")
+            st.error(f"❌ Wrong version! Expected 1.0.3, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")

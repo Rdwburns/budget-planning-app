@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
-from calculations import PLCalculator, format_currency
+from pl_calculations import PLCalculator, format_currency
 
 
 def render_comments_system(data):

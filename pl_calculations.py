@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.1 - Force redeploy with 14-territory fix
-__version__ = "1.0.1"
+# Version: 1.0.3 - File renamed from calculations.py to force Streamlit Cloud reload
+__version__ = "1.0.3"
 
 @dataclass
 class PLLineItem:
