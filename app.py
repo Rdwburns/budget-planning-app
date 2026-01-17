@@ -225,10 +225,27 @@ def render_dashboard(data):
             st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        # Channel revenue table
+        # Calculate Last Year (FY25) revenue if available
+        ly_b2b = 0
+        if 'Last Year FY25 Revenue' in data['b2b'].columns:
+            ly_b2b = pd.to_numeric(data['b2b']['Last Year FY25 Revenue'], errors='coerce').sum()
+
+        # Estimate LY for DTC and Marketplace (assuming similar growth)
+        ly_dtc = dtc_total / 1.12 if dtc_total > 0 else 0  # Assume 12% growth
+        ly_marketplace = marketplace_total / 1.15 if marketplace_total > 0 else 0  # Assume 15% growth
+        ly_total = ly_b2b + ly_dtc + ly_marketplace
+
+        # Channel revenue table with YoY variance
         channel_table = pd.DataFrame({
             'Channel': ['B2B', 'DTC', 'Marketplace', 'Total'],
-            'Revenue': [b2b_total, dtc_total, marketplace_total, total_revenue],
+            'FY27 Revenue': [b2b_total, dtc_total, marketplace_total, total_revenue],
+            'FY25 Revenue': [ly_b2b, ly_dtc, ly_marketplace, ly_total],
+            'YoY Variance': [
+                f"{((b2b_total - ly_b2b) / ly_b2b * 100):+.1f}%" if ly_b2b > 0 else "N/A",
+                f"{((dtc_total - ly_dtc) / ly_dtc * 100):+.1f}%" if ly_dtc > 0 else "N/A",
+                f"{((marketplace_total - ly_marketplace) / ly_marketplace * 100):+.1f}%" if ly_marketplace > 0 else "N/A",
+                f"{((total_revenue - ly_total) / ly_total * 100):+.1f}%" if ly_total > 0 else "N/A"
+            ],
             '% of Total': [
                 f"{(b2b_total/total_revenue)*100:.1f}%" if total_revenue > 0 else "0%",
                 f"{(dtc_total/total_revenue)*100:.1f}%" if total_revenue > 0 else "0%",
@@ -236,8 +253,23 @@ def render_dashboard(data):
                 "100.0%"
             ]
         })
-        channel_table['Revenue'] = channel_table['Revenue'].apply(lambda x: f"£{x:,.0f}")
+
+        # Format currency columns
+        for col in ['FY27 Revenue', 'FY25 Revenue']:
+            channel_table[col] = channel_table[col].apply(lambda x: f"£{x:,.0f}")
+
         st.dataframe(channel_table, hide_index=True, use_container_width=True)
+        st.caption("*DTC and Marketplace FY25 figures are estimates based on assumed growth rates")
+
+        # CSV Export button
+        csv = channel_table.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Export to CSV",
+            data=csv,
+            file_name=f"channel_revenue_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            key="export_channel_csv"
+        )
 
     # DTC Revenue by Territory
     st.markdown("---")
@@ -266,6 +298,16 @@ def render_dashboard(data):
             display_df = dtc_territory_df.copy()
             display_df['Revenue'] = display_df['Revenue'].apply(lambda x: f"£{x:,.0f}")
             st.dataframe(display_df, hide_index=True, use_container_width=True)
+
+            # CSV Export
+            csv = dtc_territory_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Export to CSV",
+                data=csv,
+                file_name=f"dtc_by_territory_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                key="export_dtc_csv"
+            )
 
         with col2:
             st.markdown("#### Monthly Trend")
@@ -594,16 +636,48 @@ def render_revenue_inputs(data):
                     # Transpose back for saving
                     edited_df = edited_transposed.T
 
-                if st.button("💾 Save Changes", key=f"save_dtc_{territory}"):
-                    # Update session state with edited DTC data
-                    # Merge edited inputs back with calculated metrics
-                    full_df = pd.concat([edited_df, calculated_df])
-                    full_df['Territory'] = territory
-                    full_df = full_df.reset_index()
+                col1, col2 = st.columns([1, 3])
 
-                    # Update session state
-                    st.session_state.data['dtc'][territory] = full_df
-                    st.success(f"✅ Changes saved for {territory}!")
+                with col1:
+                    if st.button("💾 Save Changes", key=f"save_dtc_{territory}"):
+                        # Update session state with edited DTC data
+                        # Merge edited inputs back with calculated metrics
+                        full_df = pd.concat([edited_df, calculated_df])
+                        full_df['Territory'] = territory
+                        full_df = full_df.reset_index()
+
+                        # Update session state
+                        st.session_state.data['dtc'][territory] = full_df
+                        st.success(f"✅ Changes saved for {territory}!")
+
+                with col2:
+                    # Copy Last Month feature
+                    if len(date_cols) >= 2:
+                        col_month1, col_month2 = st.columns(2)
+                        with col_month1:
+                            source_month = st.selectbox(
+                                "Copy from:",
+                                date_cols[:12],
+                                key=f"source_{territory}"
+                            )
+                        with col_month2:
+                            target_months = [m for m in date_cols[:12] if m > source_month]
+                            if target_months:
+                                target_month = st.selectbox(
+                                    "To:",
+                                    target_months,
+                                    key=f"target_{territory}"
+                                )
+                                if st.button("📋 Copy Month", key=f"copy_{territory}"):
+                                    # Copy values from source to target month
+                                    for metric in editable_df.index:
+                                        if source_month in editable_df.columns and target_month in editable_df.columns:
+                                            st.session_state.data['dtc'][territory].loc[
+                                                st.session_state.data['dtc'][territory]['Metric'] == metric,
+                                                target_month
+                                            ] = editable_df.loc[metric, source_month]
+                                    st.success(f"✅ Copied {source_month} → {target_month}. Click 'Save Changes' to persist.")
+                                    st.rerun()
 
             # Show calculated outputs (read-only)
             if not calculated_df.empty:
@@ -946,7 +1020,7 @@ def render_b2b_management(data):
         key="b2b_editor"
     )
 
-    col1, col2 = st.columns([1, 4])
+    col1, col2, col3 = st.columns([1, 1, 3])
     with col1:
         if st.button("💾 Save Changes", type="primary", key="save_b2b_main"):
             # Update session state with edited data
@@ -963,6 +1037,17 @@ def render_b2b_management(data):
                         st.session_state.data['b2b'].loc[mask, col] = row[col]
 
             st.success("✅ Changes saved! Edits persist across page changes.")
+
+    with col2:
+        # CSV Export
+        csv = display_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Export to CSV",
+            data=csv,
+            file_name=f"b2b_customers_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            key="export_b2b_csv"
+        )
 
     # Add new customer form
     st.markdown("---")
@@ -1106,33 +1191,95 @@ def render_scenario_planning(data):
     with col2:
         st.markdown("### 🔮 New Scenario")
 
-        scenario_name = st.text_input("Scenario Name", value="Optimistic Growth")
+        # Load saved scenarios
+        if 'saved_scenarios' in st.session_state and st.session_state.saved_scenarios:
+            st.markdown("**Load Saved Scenario:**")
+            scenario_options = ['Create New'] + [s['name'] for s in st.session_state.saved_scenarios]
+            selected_scenario = st.selectbox(
+                "Select scenario:",
+                scenario_options,
+                key="scenario_selector"
+            )
+
+            if selected_scenario != 'Create New':
+                # Load the selected scenario
+                loaded = next(s for s in st.session_state.saved_scenarios if s['name'] == selected_scenario)
+                st.info(f"📅 Saved: {loaded['timestamp']}")
+                scenario_name = st.text_input("Scenario Name", value=selected_scenario)
+                # Pre-populate sliders with loaded values (we'll handle this below)
+                st.session_state.loaded_scenario = loaded['params']
+            else:
+                scenario_name = st.text_input("Scenario Name", value="Optimistic Growth")
+                if 'loaded_scenario' in st.session_state:
+                    del st.session_state.loaded_scenario
+        else:
+            scenario_name = st.text_input("Scenario Name", value="Optimistic Growth")
 
     st.markdown("---")
 
     # Adjustment sliders
     st.markdown("### 🎛️ Scenario Adjustments")
 
+    # Get default values from loaded scenario if available
+    loaded = st.session_state.get('loaded_scenario', {})
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.markdown("**Revenue Drivers**")
 
-        dtc_growth = st.slider("DTC Revenue Growth %", -30, 50, 10, key="sc_dtc")
-        b2b_growth = st.slider("B2B Revenue Growth %", -30, 50, 5, key="sc_b2b")
-        mp_growth = st.slider("Marketplace Growth %", -30, 50, 15, key="sc_mp")
+        dtc_growth = st.slider(
+            "DTC Revenue Growth %",
+            -30, 50,
+            loaded.get('dtc_revenue_UK', 10),
+            key="sc_dtc"
+        )
+        b2b_growth = st.slider(
+            "B2B Revenue Growth %",
+            -30, 50,
+            loaded.get('b2b_growth', 5),
+            key="sc_b2b"
+        )
+        mp_growth = st.slider(
+            "Marketplace Growth %",
+            -30, 50,
+            loaded.get('mp_growth', 15),
+            key="sc_mp"
+        )
 
     with col2:
         st.markdown("**Margin Impacts**")
 
-        cogs_change = st.slider("CoGS Rate Change (pp)", -5.0, 5.0, 0.0, step=0.5, key="sc_cogs")
-        fulfilment_change = st.slider("Fulfilment Rate Change (pp)", -5.0, 5.0, 0.0, step=0.5, key="sc_ful")
+        cogs_change = st.slider(
+            "CoGS Rate Change (pp)",
+            -5.0, 5.0,
+            float(loaded.get('cogs_change', 0.0)),
+            step=0.5,
+            key="sc_cogs"
+        )
+        fulfilment_change = st.slider(
+            "Fulfilment Rate Change (pp)",
+            -5.0, 5.0,
+            float(loaded.get('fulfilment_change', 0.0)),
+            step=0.5,
+            key="sc_ful"
+        )
 
     with col3:
         st.markdown("**Cost Assumptions**")
 
-        marketing_change = st.slider("Marketing Spend %", -30, 50, 0, key="sc_mkt")
-        overhead_change = st.slider("Overhead Change %", -20, 30, 0, key="sc_oh")
+        marketing_change = st.slider(
+            "Marketing Spend %",
+            -30, 50,
+            loaded.get('marketing_change', 0),
+            key="sc_mkt"
+        )
+        overhead_change = st.slider(
+            "Overhead Change %",
+            -20, 30,
+            loaded.get('overhead_change', 0),
+            key="sc_oh"
+        )
 
     # Build scenario
     scenario = {
@@ -1143,6 +1290,8 @@ def render_scenario_planning(data):
         'mp_growth': mp_growth,
         'cogs_change': cogs_change,
         'fulfilment_change': fulfilment_change,
+        'marketing_change': marketing_change,
+        'overhead_change': overhead_change,
     }
 
     st.markdown("---")
@@ -1357,20 +1506,44 @@ def render_scenario_planning(data):
             st.warning(f"Unable to calculate detailed comparison: {e}")
             st.error(f"Error details: {str(e)}")
 
-    # Save scenario
+    # Save/Delete scenario
     st.markdown("---")
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2 = st.columns([3, 1])
 
     with col1:
         if st.button("💾 Save Scenario", type="primary"):
             if 'saved_scenarios' not in st.session_state:
                 st.session_state.saved_scenarios = []
-            st.session_state.saved_scenarios.append({
+
+            # Check if scenario with same name exists and update it
+            existing_idx = next((i for i, s in enumerate(st.session_state.saved_scenarios) if s['name'] == scenario_name), None)
+            scenario_data = {
                 'name': scenario_name,
                 'params': scenario,
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M")
-            })
-            st.success(f"Scenario '{scenario_name}' saved!")
+            }
+
+            if existing_idx is not None:
+                st.session_state.saved_scenarios[existing_idx] = scenario_data
+                st.success(f"✅ Scenario '{scenario_name}' updated!")
+            else:
+                st.session_state.saved_scenarios.append(scenario_data)
+                st.success(f"✅ Scenario '{scenario_name}' saved!")
+
+    with col2:
+        # Delete scenario button
+        if 'saved_scenarios' in st.session_state and st.session_state.saved_scenarios:
+            if st.session_state.get('loaded_scenario'):
+                # Only show delete if a scenario is loaded
+                if st.button("🗑️ Delete", type="secondary"):
+                    # Find and remove the loaded scenario
+                    loaded_name = next((s['name'] for s in st.session_state.saved_scenarios if s['params'] == st.session_state.loaded_scenario), None)
+                    if loaded_name:
+                        st.session_state.saved_scenarios = [s for s in st.session_state.saved_scenarios if s['name'] != loaded_name]
+                        if 'loaded_scenario' in st.session_state:
+                            del st.session_state.loaded_scenario
+                        st.success(f"✅ Scenario '{loaded_name}' deleted!")
+                        st.rerun()
 
 
 def render_pl_view(data):
