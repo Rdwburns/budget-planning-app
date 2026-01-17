@@ -201,7 +201,13 @@ class PLCalculator:
 
         filtered = oh.copy()
         if territory:
-            filtered = filtered[filtered['Territory'] == territory]
+            # Apply territory name mapping (same as B2B)
+            territory_name = self.territory_to_country.get(territory, territory)
+            # Try both the mapped name and the original code
+            filtered = filtered[
+                (filtered['Territory'] == territory_name) |
+                (filtered['Territory'] == territory)
+            ]
         if function:
             filtered = filtered[filtered['Function'] == function]
 
@@ -300,6 +306,36 @@ class PLCalculator:
             for col in self.dates:
                 if col in combined.columns and col in all_pls[territory].columns:
                     combined[col] = combined[col] + all_pls[territory][col]
+
+        # Add Group/Shared level overheads (like central marketing) that aren't allocated to territories
+        oh = self.data.get('overheads', pd.DataFrame())
+        if not oh.empty and 'Territory' in oh.columns:
+            # Find overheads with Territory = 'Group', 'Shared', 'Central', or similar
+            group_overheads = oh[
+                oh['Territory'].isin(['Group', 'Shared', 'Central', 'Corporate', 'HQ']) |
+                oh['Territory'].isna()
+            ]
+
+            if not group_overheads.empty:
+                group_oh_values = {}
+                for col in self.dates:
+                    if col in group_overheads.columns:
+                        val = pd.to_numeric(group_overheads[col], errors='coerce').sum()
+                        group_oh_values[col] = val
+
+                # Add to combined overheads
+                if ('Overheads', 'Overheads') in combined.index:
+                    for col in self.dates:
+                        if col in combined.columns:
+                            combined.loc[('Overheads', 'Overheads'), col] += group_oh_values.get(col, 0)
+
+                # Recalculate EBITDA with new overheads
+                if ('CM2', 'Total CM2') in combined.index and ('EBITDA', 'EBITDA') in combined.index:
+                    for col in self.dates:
+                        if col in combined.columns:
+                            cm2 = combined.loc[('CM2', 'Total CM2'), col]
+                            overheads = combined.loc[('Overheads', 'Overheads'), col]
+                            combined.loc[('EBITDA', 'EBITDA'), col] = cm2 + overheads
 
         return combined
 
