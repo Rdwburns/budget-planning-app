@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.5 - Enhanced debug: show marketplace territory name mismatch
-__version__ = "1.0.5"
+# Version: 1.0.6 - Add B2B debug to identify unmapped countries causing £5.8M gap
+__version__ = "1.0.6"
 
 @dataclass
 class PLLineItem:
@@ -49,14 +49,27 @@ class PLCalculator:
             'SK': 'Slovakia',
         }
 
-    def calculate_b2b_revenue(self, territory: str = None, country_group: str = None) -> Dict[str, float]:
+    def calculate_b2b_revenue(self, territory: str = None, country_group: str = None, debug=False) -> Dict[str, float]:
         """Calculate B2B revenue by month, optionally filtered"""
-        b2b = self.data['b2b'].copy()
+        b2b_original = self.data['b2b'].copy()
+        b2b = b2b_original.copy()
 
         if territory:
             # Map territory code to full country name for filtering
             country_name = self.territory_to_country.get(territory, territory)
             b2b = b2b[b2b['Country'] == country_name]
+
+            # DEBUG: Track B2B matching
+            if debug:
+                self._b2b_debug = self._b2b_debug if hasattr(self, '_b2b_debug') else {}
+                available_countries = b2b_original['Country'].unique().tolist() if 'Country' in b2b_original.columns else []
+                revenue_found = sum([pd.to_numeric(b2b[col], errors='coerce').sum() for col in self.dates if col in b2b.columns])
+                self._b2b_debug[territory] = {
+                    'searching_for': country_name,
+                    'available_in_excel': available_countries,
+                    'found': len(b2b) > 0,
+                    'revenue': revenue_found
+                }
         elif country_group:
             b2b = b2b[b2b['Country Group'] == country_group]
 
@@ -245,7 +258,7 @@ class PLCalculator:
 
         # Revenue
         dtc_rev = self.calculate_dtc_revenue(territory)
-        b2b_rev = self.calculate_b2b_revenue(territory=territory)
+        b2b_rev = self.calculate_b2b_revenue(territory=territory, debug=debug)
         mp_rev = self.calculate_marketplace_revenue(territory, debug=debug)
 
         rows.append({'Line': 'DTC Revenue', 'Category': 'Revenue', **dtc_rev})

@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #16a085; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #c0392b; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '🔬 Version 1.0.5 - Marketplace Debug'
+            '🏢 Version 1.0.6 - B2B Debug'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1661,15 +1661,15 @@ def render_pl_view(data):
     # Show diagnostic info in an expander
     with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=True):
         st.write(f"**pl_calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.5")
+        st.write(f"**Expected version**: 1.0.6")
 
-        if calc_version == "1.0.5":
-            st.success("✅ Version 1.0.5 loaded - Marketplace debug enabled")
-            st.info("Check '🔍 Territory Revenue Breakdown' to see marketplace territory name matching")
-        elif calc_version in ["1.0.4", "1.0.3"]:
-            st.warning(f"⚠️ Version {calc_version} - Need to update to 1.0.5 for marketplace debug")
+        if calc_version == "1.0.6":
+            st.success("✅ Version 1.0.6 loaded - B2B debug enabled")
+            st.info("Check '🏢 B2B Data Extraction Debug' to see which B2B countries are missing")
+        elif calc_version in ["1.0.5", "1.0.4", "1.0.3"]:
+            st.warning(f"⚠️ Version {calc_version} - Need to update to 1.0.6 for B2B debug")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.5, got {calc_version}")
+            st.error(f"❌ Wrong version! Expected 1.0.6, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")
@@ -1714,6 +1714,34 @@ def render_pl_view(data):
                                         st.code('\n'.join([f"  - {t}" for t in mp_info['available_in_excel']]))
                                     else:
                                         st.write(f"**{terr}**: {mp_info}")
+
+                    # Show B2B debug for ALL territories
+                    if hasattr(calc, '_b2b_debug'):
+                        st.markdown("---")
+                        st.markdown("**🏢 B2B Data Extraction Debug (ALL Territories):**")
+                        st.write("This shows B2B revenue extraction for each territory:")
+
+                        # Show territories with B2B issues
+                        b2b_issues = []
+                        for terr, b2b_info in calc._b2b_debug.items():
+                            if isinstance(b2b_info, dict):
+                                if b2b_info['revenue'] == 0 or not b2b_info['found']:
+                                    b2b_issues.append(terr)
+
+                        if b2b_issues:
+                            st.warning(f"⚠️ **Territories with B2B issues**: {', '.join(b2b_issues)}")
+
+                        # Show details for all territories (collapsed to save space)
+                        for terr, b2b_info in sorted(calc._b2b_debug.items()):
+                            if isinstance(b2b_info, dict):
+                                emoji = "❌" if b2b_info['revenue'] == 0 else "✅"
+                                with st.expander(f"{emoji} **{terr}** - B2B Revenue: {format_currency(b2b_info['revenue'])}"):
+                                    st.write(f"  - Searching for: `{b2b_info['searching_for']}`")
+                                    st.write(f"  - Found: {'✅ Yes' if b2b_info['found'] else '❌ No'}")
+                                    st.write(f"  - Available B2B countries in Excel:")
+                                    st.code('\n'.join([f"  - {t}" for t in b2b_info['available_in_excel'][:20]]))  # Limit to first 20
+                                    if len(b2b_info['available_in_excel']) > 20:
+                                        st.write(f"  ... and {len(b2b_info['available_in_excel']) - 20} more")
 
                     total_debug_rev = sum(calc._debug_territory_revenues.values())
                     st.metric("Total from all territories", format_currency(total_debug_rev))
