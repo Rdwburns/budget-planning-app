@@ -265,7 +265,8 @@ class PLCalculator:
     def calculate_combined_pl(self) -> pd.DataFrame:
         """Calculate combined P&L across all territories"""
         all_pls = {}
-        territories = ['UK', 'ES', 'DE', 'IT', 'RO', 'CZ', 'HU', 'SK']
+        # Include all territories with DTC, B2B, or Marketplace revenue
+        territories = ['UK', 'ES', 'DE', 'IT', 'FR', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
 
         for territory in territories:
             pl = self.calculate_territory_pl(territory)

@@ -452,10 +452,17 @@ def render_revenue_inputs(data):
                 if not marketing_row.empty:
                     total_marketing += marketing_row[date_cols].sum().sum()
 
-                # Customers
-                customers_row = dtc_df[dtc_df['Metric'] == 'New Customers']
-                if not customers_row.empty:
-                    total_customers += customers_row[date_cols].sum().sum()
+                # Customers - sum all customer segments
+                customer_segments = [
+                    'New Customers (Non-Subs)',
+                    'New Subscription Customers',
+                    'Returning Customers (Non-Subs)',
+                    'Recurring Subscription Customers'
+                ]
+                for segment in customer_segments:
+                    segment_row = dtc_df[dtc_df['Metric'] == segment]
+                    if not segment_row.empty:
+                        total_customers += segment_row[date_cols].sum().sum()
 
                 # Traffic
                 traffic_row = dtc_df[dtc_df['Metric'] == 'Traffic']
@@ -753,9 +760,17 @@ def render_revenue_inputs(data):
                 base_traffic = traffic_row[date_cols].sum().sum()
 
             base_customers = 0
-            customers_row = dtc_df[dtc_df['Metric'] == 'New Customers']
-            if not customers_row.empty:
-                base_customers = customers_row[date_cols].sum().sum()
+            # Sum all customer segments for total customers
+            customer_segments = [
+                'New Customers (Non-Subs)',
+                'New Subscription Customers',
+                'Returning Customers (Non-Subs)',
+                'Recurring Subscription Customers'
+            ]
+            for segment in customer_segments:
+                segment_row = dtc_df[dtc_df['Metric'] == segment]
+                if not segment_row.empty:
+                    base_customers += segment_row[date_cols].sum().sum()
 
             base_revenue = 0
             revenue_row = dtc_df[dtc_df['Metric'] == 'Total Revenue']
@@ -1147,10 +1162,8 @@ def render_scenario_planning(data):
         sum(base_calc.calculate_dtc_revenue(territory).values())
         for territory in dtc_territories
     )
-    base_marketplace = sum(
-        sum(base_calc.calculate_marketplace_revenue(territory).values())
-        for territory in dtc_territories
-    )
+    # Use total marketplace revenue across ALL territories (not just DTC)
+    base_marketplace = sum(base_calc.calculate_total_marketplace_revenue().values())
     base_total = base_b2b + base_dtc + base_marketplace
 
     # Scenario case
