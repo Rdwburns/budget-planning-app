@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #1f77b4; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #e74c3c; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '✨ Version 1.0.1 - P&L Fixes Deployed'
+            '🔄 Version 1.0.2 - Force Redeploy (P&L Fix)'
             '</div>',
             unsafe_allow_html=True
         )

@@ -7,6 +7,9 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
+# Version: 1.0.1 - Force redeploy with 14-territory fix
+__version__ = "1.0.1"
+
 @dataclass
 class PLLineItem:
     """A single P&L line item with monthly values"""
@@ -294,6 +297,7 @@ class PLCalculator:
         # Include ALL territories with DTC, B2B, or Marketplace revenue
         # This includes DTC territories (UK, ES, IT, RO, CZ, HU, SK, Other EU)
         # and marketplace-only territories (FR, DE, PL, US, AU, ROW)
+        # CRITICAL FIX: Expanded from 8 to 14 territories to get full £23.4M revenue
         territories = ['UK', 'ES', 'DE', 'IT', 'FR', 'RO', 'PL', 'CZ', 'HU', 'SK', 'Other EU', 'US', 'AU', 'ROW']
 
         for territory in territories:
