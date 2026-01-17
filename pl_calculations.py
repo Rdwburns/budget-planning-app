@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.4 - Added debug logging to identify which territories return zero
-__version__ = "1.0.4"
+# Version: 1.0.5 - Enhanced debug: show marketplace territory name mismatch
+__version__ = "1.0.5"
 
 @dataclass
 class PLLineItem:
@@ -91,10 +91,13 @@ class PLCalculator:
 
         return result
 
-    def calculate_marketplace_revenue(self, territory: str) -> Dict[str, float]:
+    def calculate_marketplace_revenue(self, territory: str, debug=False) -> Dict[str, float]:
         """Calculate marketplace (Amazon) revenue for a territory"""
         amazon = self.data.get('amazon', pd.DataFrame())
         if amazon.empty:
+            if debug:
+                self._mp_debug = self._mp_debug if hasattr(self, '_mp_debug') else {}
+                self._mp_debug[territory] = "Amazon sheet empty"
             return {d: 0 for d in self.dates}
 
 
@@ -126,9 +129,23 @@ class PLCalculator:
             # Search in the revenue section (rows 22-35 approximately)
             revenue_section = amazon.iloc[start_idx:start_idx+15]
             territory_row = revenue_section[revenue_section.iloc[:, 0] == territory_name]
+
+            # DEBUG: Store available territory names
+            if debug:
+                self._mp_debug = self._mp_debug if hasattr(self, '_mp_debug') else {}
+                available_territories = revenue_section.iloc[:, 0].dropna().tolist()
+                self._mp_debug[territory] = {
+                    'searching_for': territory_name,
+                    'available_in_excel': available_territories,
+                    'found': not territory_row.empty
+                }
         else:
             # Fallback: search entire sheet
             territory_row = amazon[amazon.iloc[:, 0] == territory_name]
+
+            if debug:
+                self._mp_debug = self._mp_debug if hasattr(self, '_mp_debug') else {}
+                self._mp_debug[territory] = "Territory £ section not found in Amazon sheet"
 
         if territory_row.empty:
             return {d: 0 for d in self.dates}
@@ -222,14 +239,14 @@ class PLCalculator:
 
         return result
 
-    def calculate_territory_pl(self, territory: str) -> pd.DataFrame:
+    def calculate_territory_pl(self, territory: str, debug=False) -> pd.DataFrame:
         """Calculate full P&L for a territory"""
         rows = []
 
         # Revenue
         dtc_rev = self.calculate_dtc_revenue(territory)
         b2b_rev = self.calculate_b2b_revenue(territory=territory)
-        mp_rev = self.calculate_marketplace_revenue(territory)
+        mp_rev = self.calculate_marketplace_revenue(territory, debug=debug)
 
         rows.append({'Line': 'DTC Revenue', 'Category': 'Revenue', **dtc_rev})
         rows.append({'Line': 'B2B Revenue', 'Category': 'Revenue', **b2b_rev})
@@ -304,7 +321,7 @@ class PLCalculator:
         territory_revenues = {}
 
         for territory in territories:
-            pl = self.calculate_territory_pl(territory)
+            pl = self.calculate_territory_pl(territory, debug=debug)
             all_pls[territory] = pl
 
             # DEBUG: Extract total revenue for this territory

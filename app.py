@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #e67e22; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #16a085; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '🔍 Version 1.0.4 - Debug Diagnostics'
+            '🔬 Version 1.0.5 - Marketplace Debug'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1661,15 +1661,15 @@ def render_pl_view(data):
     # Show diagnostic info in an expander
     with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=True):
         st.write(f"**pl_calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.4")
+        st.write(f"**Expected version**: 1.0.5")
 
-        if calc_version == "1.0.4":
-            st.success("✅ Version 1.0.4 loaded - Debug logging enabled")
-            st.info("Check '🔍 Territory Revenue Breakdown' below to see which territories contribute zero")
-        elif calc_version == "1.0.3":
-            st.warning("⚠️ Version 1.0.3 - Need to update to 1.0.4 for debug info")
+        if calc_version == "1.0.5":
+            st.success("✅ Version 1.0.5 loaded - Marketplace debug enabled")
+            st.info("Check '🔍 Territory Revenue Breakdown' to see marketplace territory name matching")
+        elif calc_version in ["1.0.4", "1.0.3"]:
+            st.warning(f"⚠️ Version {calc_version} - Need to update to 1.0.5 for marketplace debug")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.4, got {calc_version}")
+            st.error(f"❌ Wrong version! Expected 1.0.5, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")
@@ -1698,6 +1698,22 @@ def render_pl_view(data):
                     if zero_territories:
                         st.warning(f"⚠️ **Territories with ZERO revenue**: {', '.join(zero_territories)}")
                         st.write("These territories are NOT contributing to the total!")
+
+                        # Show marketplace debug for zero territories
+                        if hasattr(calc, '_mp_debug'):
+                            st.markdown("---")
+                            st.markdown("**🔬 Marketplace Data Extraction Debug:**")
+                            for terr in zero_territories:
+                                if terr in calc._mp_debug:
+                                    mp_info = calc._mp_debug[terr]
+                                    if isinstance(mp_info, dict):
+                                        st.write(f"**{terr}**:")
+                                        st.write(f"  - Searching for: `{mp_info['searching_for']}`")
+                                        st.write(f"  - Found: {'✅ Yes' if mp_info['found'] else '❌ No'}")
+                                        st.write(f"  - Available in Excel:")
+                                        st.code('\n'.join([f"  - {t}" for t in mp_info['available_in_excel']]))
+                                    else:
+                                        st.write(f"**{terr}**: {mp_info}")
 
                     total_debug_rev = sum(calc._debug_territory_revenues.values())
                     st.metric("Total from all territories", format_currency(total_debug_rev))
