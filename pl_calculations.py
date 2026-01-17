@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.11 - Fix group overheads handling for new P&L structure
-__version__ = "1.0.11"
+# Version: 1.0.12 - Add overhead categories debug output
+__version__ = "1.0.12"
 
 @dataclass
 class PLLineItem:
@@ -306,6 +306,10 @@ class PLCalculator:
         oh = self.data.get('overheads', pd.DataFrame())
         if oh.empty or 'Category' not in oh.columns:
             return {}
+
+        # DEBUG: Store all unique categories for diagnostics
+        if not hasattr(self, '_all_overhead_categories'):
+            self._all_overhead_categories = sorted(oh['Category'].dropna().unique().tolist())
 
         # Marketing categories from Excel P&L structure
         marketing_categories = [

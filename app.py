@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #16a085; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #3498db; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '🟢 Version 1.0.11 - Fixed'
+            '🔵 Version 1.0.12 - Debug'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1661,17 +1661,15 @@ def render_pl_view(data):
     # Show diagnostic info in an expander
     with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=True):
         st.write(f"**pl_calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.11")
+        st.write(f"**Expected version**: 1.0.12")
 
-        if calc_version == "1.0.11":
-            st.success("✅ Version 1.0.11 loaded - Full P&L structure with group overheads fix")
-            st.info("P&L now includes Marketing breakdown, CM3, Other Overheads breakdown, and Other Expenses. EBITDA should now match Excel!")
-        elif calc_version == "1.0.10":
-            st.error("⚠️ Version 1.0.10 - Has bug with group overheads. Need 1.0.11.")
-        elif calc_version == "1.0.9":
-            st.warning("⚠️ Version 1.0.9 - Missing Marketing breakdown and CM3. Need 1.0.11 for complete P&L structure.")
+        if calc_version == "1.0.12":
+            st.success("✅ Version 1.0.12 loaded - Debug mode to identify overhead categories")
+            st.info("Check 'Overhead Categories in Excel' below to see available categories and fix marketing name mismatch.")
+        elif calc_version == "1.0.11":
+            st.warning("⚠️ Version 1.0.11 - Need 1.0.12 to see overhead categories debug.")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.11, got {calc_version}")
+            st.error(f"❌ Wrong version! Expected 1.0.12, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")
@@ -1747,6 +1745,13 @@ def render_pl_view(data):
 
                     total_debug_rev = sum(calc._debug_territory_revenues.values())
                     st.metric("Total from all territories", format_currency(total_debug_rev))
+
+            # Show overhead categories debug
+            if hasattr(calc, '_all_overhead_categories'):
+                with st.expander("📋 Overhead Categories in Excel (Debug)", expanded=True):
+                    st.write("**All unique categories found in Overheads sheet:**")
+                    st.code('\n'.join([f"  - {cat}" for cat in calc._all_overhead_categories]))
+                    st.info("💡 Marketing costs should match one of these category names exactly (case-sensitive)")
 
         # Format for display
         display_pl = pl.copy()
