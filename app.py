@@ -93,7 +93,7 @@ def render_sidebar():
             "Navigate to",
             ["📊 Dashboard", "💰 Revenue Inputs", "📦 B2B Management",
              "💸 Cost Management", "🎯 Scenario Planning", "📈 P&L View",
-             "📉 Budget vs Actuals", "📚 Version Control", "⬇️ Export"],
+             "📉 Budget vs Actuals", "📚 Version Control", "📈 Sensitivity Analysis", "⬇️ Export"],
             label_visibility="collapsed"
         )
 
@@ -2323,6 +2323,292 @@ def render_version_control(data):
                     st.caption(f"Version index: {idx}")
 
 
+def render_sensitivity_analysis(data):
+    """Render sensitivity analysis page for what-if single variable analysis"""
+    st.markdown('<p class="main-header">📈 Sensitivity Analysis</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">Understand the impact of individual variables on your budget</p>', unsafe_allow_html=True)
+
+    if not data:
+        st.warning("Please upload a budget file first")
+        return
+
+    st.markdown("---")
+
+    st.markdown("""
+    **What is Sensitivity Analysis?**
+
+    Sensitivity analysis helps you understand which variables have the biggest impact on your budget.
+    Adjust one variable at a time to see how it affects total revenue and profitability.
+
+    **How to use:**
+    1. Select a variable to test (e.g., DTC Traffic, B2B Revenue)
+    2. Adjust the slider to see the impact
+    3. View the results in the tornado chart and sensitivity table
+    """)
+
+    st.markdown("---")
+
+    # Base case calculations
+    calc_base = PLCalculator(data)
+    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
+
+    base_b2b = sum(calc_base.calculate_b2b_revenue().values())
+    base_dtc = sum(sum(calc_base.calculate_dtc_revenue(t).values()) for t in dtc_territories)
+    base_marketplace = sum(calc_base.calculate_total_marketplace_revenue().values())
+    base_total_revenue = base_b2b + base_dtc + base_marketplace
+
+    st.markdown("### 📊 Base Case")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Revenue", f"£{base_total_revenue:,.0f}")
+    with col2:
+        st.metric("B2B", f"£{base_b2b:,.0f}")
+    with col3:
+        st.metric("DTC", f"£{base_dtc:,.0f}")
+    with col4:
+        st.metric("Marketplace", f"£{base_marketplace:,.0f}")
+
+    st.markdown("---")
+
+    # Sensitivity variables
+    st.markdown("### 🎚️ Test Variables")
+
+    variables = {
+        "B2B Revenue": {"min": -30, "max": 30, "default": 0, "step": 5, "channel": "b2b"},
+        "DTC Revenue": {"min": -30, "max": 30, "default": 0, "step": 5, "channel": "dtc"},
+        "Marketplace Revenue": {"min": -30, "max": 30, "default": 0, "step": 5, "channel": "marketplace"},
+        "DTC Traffic": {"min": -30, "max": 30, "default": 0, "step": 5, "channel": "dtc_traffic"},
+        "DTC Conversion Rate": {"min": -30, "max": 30, "default": 0, "step": 5, "channel": "dtc_cvr"},
+        "DTC AOV": {"min": -30, "max": 30, "default": 0, "step": 5, "channel": "dtc_aov"},
+        "COGS Rate (All Channels)": {"min": -20, "max": 20, "default": 0, "step": 5, "channel": "cogs"},
+    }
+
+    # Select variable to test
+    selected_var = st.selectbox(
+        "Select variable to test:",
+        list(variables.keys()),
+        key="sensitivity_variable"
+    )
+
+    var_config = variables[selected_var]
+
+    # Slider for adjustment
+    adjustment = st.slider(
+        f"Adjust {selected_var} (%)",
+        min_value=var_config["min"],
+        max_value=var_config["max"],
+        value=var_config["default"],
+        step=var_config["step"],
+        key="sensitivity_slider"
+    )
+
+    st.markdown("---")
+
+    # Calculate sensitivity impact
+    scenario_adjustments = {}
+
+    if var_config["channel"] == "b2b":
+        scenario_adjustments['b2b_revenue_adjustment'] = adjustment / 100
+    elif var_config["channel"] == "dtc":
+        scenario_adjustments['dtc_revenue_adjustment'] = adjustment / 100
+    elif var_config["channel"] == "marketplace":
+        scenario_adjustments['marketplace_revenue_adjustment'] = adjustment / 100
+    elif var_config["channel"] == "dtc_traffic":
+        scenario_adjustments['dtc_traffic_adjustment'] = adjustment / 100
+    elif var_config["channel"] == "dtc_cvr":
+        scenario_adjustments['dtc_cvr_adjustment'] = adjustment / 100
+    elif var_config["channel"] == "dtc_aov":
+        scenario_adjustments['dtc_aov_adjustment'] = adjustment / 100
+    elif var_config["channel"] == "cogs":
+        scenario_adjustments['cogs_adjustment'] = adjustment / 100
+
+    # Apply simple revenue adjustments (more sophisticated would adjust underlying drivers)
+    if adjustment != 0:
+        # Calculate new values (initialize with base values)
+        new_b2b = base_b2b
+        new_dtc = base_dtc
+        new_marketplace = base_marketplace
+
+        if var_config["channel"] == "b2b":
+            new_b2b = base_b2b * (1 + adjustment / 100)
+        elif var_config["channel"] == "dtc":
+            new_dtc = base_dtc * (1 + adjustment / 100)
+        elif var_config["channel"] == "marketplace":
+            new_marketplace = base_marketplace * (1 + adjustment / 100)
+        elif var_config["channel"] in ["dtc_traffic", "dtc_cvr", "dtc_aov"]:
+            # For DTC driver changes, approximate impact on revenue
+            new_dtc = base_dtc * (1 + adjustment / 100)
+        elif var_config["channel"] == "cogs":
+            # COGS affects margin, not revenue - keep base values
+            pass
+
+        new_total_revenue = new_b2b + new_dtc + new_marketplace
+
+        # Show results
+        st.markdown("### 📈 Sensitivity Results")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("#### Impact Metrics")
+
+            revenue_delta = new_total_revenue - base_total_revenue
+            revenue_delta_pct = (revenue_delta / base_total_revenue * 100) if base_total_revenue != 0 else 0
+
+            st.metric(
+                "Total Revenue",
+                f"£{new_total_revenue:,.0f}",
+                f"£{revenue_delta:+,.0f} ({revenue_delta_pct:+.1f}%)"
+            )
+
+            if var_config["channel"] == "b2b":
+                b2b_delta = new_b2b - base_b2b
+                st.metric(
+                    "B2B Revenue",
+                    f"£{new_b2b:,.0f}",
+                    f"£{b2b_delta:+,.0f}"
+                )
+            elif var_config["channel"] == "dtc" or var_config["channel"] in ["dtc_traffic", "dtc_cvr", "dtc_aov"]:
+                dtc_delta = new_dtc - base_dtc
+                st.metric(
+                    "DTC Revenue",
+                    f"£{new_dtc:,.0f}",
+                    f"£{dtc_delta:+,.0f}"
+                )
+            elif var_config["channel"] == "marketplace":
+                mp_delta = new_marketplace - base_marketplace
+                st.metric(
+                    "Marketplace Revenue",
+                    f"£{new_marketplace:,.0f}",
+                    f"£{mp_delta:+,.0f}"
+                )
+
+        with col2:
+            st.markdown("#### Sensitivity Interpretation")
+
+            if abs(revenue_delta_pct) < 2:
+                st.info(f"🟢 **Low Sensitivity**: {selected_var} has a relatively small impact on total revenue.")
+            elif abs(revenue_delta_pct) < 5:
+                st.warning(f"🟡 **Medium Sensitivity**: {selected_var} has a moderate impact on total revenue.")
+            else:
+                st.error(f"🔴 **High Sensitivity**: {selected_var} has a significant impact on total revenue. This is a key driver!")
+
+            st.markdown("**Key Insights:**")
+            if var_config["channel"] in ["b2b", "dtc", "marketplace"]:
+                st.write(f"- A {adjustment:+}% change in {selected_var} results in a {revenue_delta_pct:+.1f}% change in total revenue")
+                st.write(f"- Revenue impact: £{abs(revenue_delta):,.0f}")
+            elif var_config["channel"] in ["dtc_traffic", "dtc_cvr", "dtc_aov"]:
+                st.write(f"- A {adjustment:+}% change in {selected_var} approximately results in a {revenue_delta_pct:+.1f}% change in total revenue")
+                st.write(f"- Focus on improving this metric for revenue growth")
+
+    else:
+        st.info("👆 Adjust the slider above to see the impact of changes")
+
+    st.markdown("---")
+
+    # Tornado chart showing impact of different variables
+    st.markdown("### 🌪️ Tornado Chart: Variable Impact Comparison")
+    st.markdown("Shows the impact on total revenue when each variable changes by ±10%")
+
+    # Calculate impact for each variable at +10% and -10%
+    import plotly.graph_objects as go
+
+    tornado_data = []
+
+    test_vars = [
+        ("B2B Revenue", "b2b"),
+        ("DTC Revenue", "dtc"),
+        ("Marketplace Revenue", "marketplace"),
+    ]
+
+    for var_name, channel in test_vars:
+        # Calculate +10% impact
+        if channel == "b2b":
+            new_total_up = (base_b2b * 1.1) + base_dtc + base_marketplace
+            new_total_down = (base_b2b * 0.9) + base_dtc + base_marketplace
+        elif channel == "dtc":
+            new_total_up = base_b2b + (base_dtc * 1.1) + base_marketplace
+            new_total_down = base_b2b + (base_dtc * 0.9) + base_marketplace
+        elif channel == "marketplace":
+            new_total_up = base_b2b + base_dtc + (base_marketplace * 1.1)
+            new_total_down = base_b2b + base_dtc + (base_marketplace * 0.9)
+
+        impact_up = ((new_total_up - base_total_revenue) / base_total_revenue * 100)
+        impact_down = ((new_total_down - base_total_revenue) / base_total_revenue * 100)
+
+        tornado_data.append({
+            'variable': var_name,
+            'impact_up': impact_up,
+            'impact_down': impact_down,
+            'range': abs(impact_up - impact_down)
+        })
+
+    # Sort by range (biggest impact first)
+    tornado_data_sorted = sorted(tornado_data, key=lambda x: x['range'], reverse=True)
+
+    # Create tornado chart
+    fig = go.Figure()
+
+    variables_list = [d['variable'] for d in tornado_data_sorted]
+    impact_up_list = [d['impact_up'] for d in tornado_data_sorted]
+    impact_down_list = [d['impact_down'] for d in tornado_data_sorted]
+
+    fig.add_trace(go.Bar(
+        name='+10%',
+        y=variables_list,
+        x=impact_up_list,
+        orientation='h',
+        marker=dict(color='#2ca02c')
+    ))
+
+    fig.add_trace(go.Bar(
+        name='-10%',
+        y=variables_list,
+        x=impact_down_list,
+        orientation='h',
+        marker=dict(color='#d62728')
+    ))
+
+    fig.update_layout(
+        title="Impact on Total Revenue (±10% change in each variable)",
+        xaxis_title="Change in Total Revenue (%)",
+        yaxis_title="Variable",
+        barmode='overlay',
+        height=400,
+        showlegend=True
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Sensitivity table
+    st.markdown("### 📋 Sensitivity Table")
+
+    sensitivity_table_data = []
+    for d in tornado_data_sorted:
+        sensitivity_table_data.append({
+            'Variable': d['variable'],
+            'Impact (+10%)': f"{d['impact_up']:+.2f}%",
+            'Impact (-10%)': f"{d['impact_down']:+.2f}%",
+            'Total Range': f"{d['range']:.2f}%"
+        })
+
+    sensitivity_df = pd.DataFrame(sensitivity_table_data)
+    st.dataframe(sensitivity_df, use_container_width=True, hide_index=True)
+
+    # Export sensitivity table
+    csv = sensitivity_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Export Sensitivity Table",
+        data=csv,
+        file_name=f"sensitivity_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        key="export_sensitivity_csv"
+    )
+
+    st.markdown("---")
+    st.markdown("**💡 Tip:** Variables with the largest range are your key drivers. Focus on improving these for maximum impact!")
+
+
 def render_export(data):
     """Render export functionality"""
     st.markdown('<p class="main-header">⬇️ Export Data</p>', unsafe_allow_html=True)
@@ -2421,6 +2707,8 @@ def main():
         render_budget_vs_actuals(data)
     elif page == "📚 Version Control":
         render_version_control(data)
+    elif page == "📈 Sensitivity Analysis":
+        render_sensitivity_analysis(data)
     elif page == "⬇️ Export":
         render_export(data)
 
