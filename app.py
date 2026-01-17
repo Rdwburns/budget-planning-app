@@ -87,6 +87,16 @@ def render_sidebar():
     with st.sidebar:
         st.image("https://img.icons8.com/fluency/96/budget.png", width=60)
         st.title("Budget Planner")
+
+        # Version indicator
+        st.markdown(
+            '<div style="text-align: center; padding: 5px; background-color: #1f77b4; color: white; '
+            'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
+            '✨ Version 1.0.1 - P&L Fixes Deployed'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
         st.markdown("---")
 
         # Navigation
