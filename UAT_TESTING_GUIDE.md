@@ -1,9 +1,24 @@
 # Budget Planning App - UAT Testing Guide & Checklist
 
-**Version**: 1.0.1
+**Version**: 1.0.2 (Force Redeploy)
 **Test Date**: _____________
 **Tester Name**: _____________
 **Environment**: Production (Streamlit Cloud)
+
+---
+
+## 🚨 CRITICAL RETEST REQUIRED
+
+**Previous UAT Result**: ❌ REJECTED - P&L View showed £17.6M instead of £23.4M
+
+**This Version (1.0.2)**: Force redeploy to fix Streamlit Cloud caching issue
+
+**What to Verify**:
+1. Version badge in sidebar is **RED** and shows "Version 1.0.2"
+2. P&L View Total Revenue = **£23.4M** (NOT £17.6M)
+3. P&L View matches Dashboard revenue
+
+**If P&L still shows £17.6M**: Contact developer immediately - deployment pipeline is broken.
 
 ---
 
@@ -43,9 +58,11 @@
 
 **Expected Results**:
 - [ ] App loads without errors
-- [ ] Sidebar shows "✨ Version 1.0.1 - P&L Fixes Deployed" badge
+- [ ] Sidebar shows **RED** badge: "🔄 Version 1.0.2 - Force Redeploy (P&L Fix)"
 - [ ] Navigation menu shows all 15 pages
 - [ ] File upload area visible in sidebar
+
+**CRITICAL**: If you see version 1.0.1 or earlier, the critical P&L fix has NOT deployed. Hard refresh (Cmd+Shift+R) and wait 5 minutes.
 
 **Pass/Fail**: ______
 **Notes**: _________________________________
