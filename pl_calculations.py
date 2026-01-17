@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.6 - Add B2B debug to identify unmapped countries causing £5.8M gap
-__version__ = "1.0.6"
+# Version: 1.0.7 - Fix B2B: try both full name AND territory code (Excel inconsistent)
+__version__ = "1.0.7"
 
 @dataclass
 class PLLineItem:
@@ -56,16 +56,24 @@ class PLCalculator:
 
         if territory:
             # Map territory code to full country name for filtering
+            # TRY BOTH: Excel B2B sheet is inconsistent (some use codes, some use full names)
             country_name = self.territory_to_country.get(territory, territory)
-            b2b = b2b[b2b['Country'] == country_name]
+
+            # Try full name first
+            b2b = b2b_original[b2b_original['Country'] == country_name].copy()
+
+            # If not found, try the territory code itself
+            if len(b2b) == 0:
+                b2b = b2b_original[b2b_original['Country'] == territory].copy()
 
             # DEBUG: Track B2B matching
             if debug:
                 self._b2b_debug = self._b2b_debug if hasattr(self, '_b2b_debug') else {}
                 available_countries = b2b_original['Country'].unique().tolist() if 'Country' in b2b_original.columns else []
                 revenue_found = sum([pd.to_numeric(b2b[col], errors='coerce').sum() for col in self.dates if col in b2b.columns])
+                search_attempts = f"{country_name} OR {territory}" if country_name != territory else country_name
                 self._b2b_debug[territory] = {
-                    'searching_for': country_name,
+                    'searching_for': search_attempts,
                     'available_in_excel': available_countries,
                     'found': len(b2b) > 0,
                     'revenue': revenue_found
