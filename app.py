@@ -1,7 +1,7 @@
 """
 Budget Planning & Forecasting App
 A Streamlit application for FY26-27 budget management
-Version: 1.0.1 - Critical P&L calculation fixes deployed
+Version: 1.0.2 - Force reload of calculations module to fix caching
 """
 import streamlit as st
 import pandas as pd
@@ -1647,7 +1647,32 @@ def render_pl_view(data):
     st.markdown("---")
 
     # Calculate and display P&L
+    # Force reload of calculations module to bypass cache
+    import calculations
+    import importlib
+    importlib.reload(calculations)
+    from calculations import PLCalculator
+
     calc = PLCalculator(data)
+
+    # DIAGNOSTIC: Show what version of calculations.py is loaded
+    calc_version = getattr(calculations, '__version__', 'UNKNOWN')
+
+    # Show diagnostic info in an expander
+    with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=False):
+        st.write(f"**calculations.py version**: {calc_version}")
+        st.write(f"**Expected version**: 1.0.2")
+
+        if calc_version == "1.0.2":
+            st.success("✅ Correct version loaded")
+        else:
+            st.error(f"❌ Wrong version! Expected 1.0.2, got {calc_version}")
+            st.warning("This explains why P&L shows £17.6M instead of £23.4M")
+
+        # Show territory count that will be used
+        st.write(f"**View Type**: {view_type}")
+        if view_type == "Combined":
+            st.info("**Territory Count**: Should process 14 territories (UK, ES, DE, IT, FR, RO, PL, CZ, HU, SK, Other EU, US, AU, ROW)")
 
     try:
         if territory:
