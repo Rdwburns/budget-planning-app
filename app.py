@@ -92,7 +92,8 @@ def render_sidebar():
         page = st.radio(
             "Navigate to",
             ["📊 Dashboard", "💰 Revenue Inputs", "📦 B2B Management",
-             "💸 Cost Management", "🎯 Scenario Planning", "📈 P&L View", "⬇️ Export"],
+             "💸 Cost Management", "🎯 Scenario Planning", "📈 P&L View",
+             "📉 Budget vs Actuals", "⬇️ Export"],
             label_visibility="collapsed"
         )
 
@@ -1694,6 +1695,296 @@ def render_pl_view(data):
         st.info("Try selecting a different territory or check that data is properly loaded.")
 
 
+def render_budget_vs_actuals(data):
+    """Render Budget vs Actuals comparison with variance analysis"""
+    st.markdown('<p class="main-header">📉 Budget vs Actuals</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">Compare actual performance against budget with variance analysis</p>', unsafe_allow_html=True)
+
+    if not data:
+        st.warning("Please upload a budget file first")
+        return
+
+    # Check if actuals data exists
+    actuals = data.get('actuals', pd.DataFrame())
+    if actuals.empty:
+        st.info("📋 No actuals data found")
+        st.markdown("""
+        To use Budget vs Actuals comparison, add an "Actuals" sheet to your Excel file with the following structure:
+
+        | Channel | Territory | 2026-02 | 2026-03 | ... |
+        |---------|-----------|---------|---------|-----|
+        | B2B     | UK        | 100000  | 105000  | ... |
+        | DTC     | UK        | 50000   | 52000   | ... |
+        | Marketplace | UK    | 25000   | 26000   | ... |
+
+        **Requirements:**
+        - Column "Channel" with values: B2B, DTC, Marketplace
+        - Column "Territory" (optional) for territory-specific actuals
+        - Date columns in YYYY-MM format with actual revenue values
+        """)
+        return
+
+    calc = PLCalculator(data)
+    date_cols = data.get('dates', [])
+
+    if not date_cols:
+        st.warning("No date columns found in the data")
+        return
+
+    st.markdown("---")
+
+    # Calculate budget totals by channel
+    dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
+
+    budget_b2b = sum(calc.calculate_b2b_revenue().values())
+    budget_dtc = sum(sum(calc.calculate_dtc_revenue(t).values()) for t in dtc_territories)
+    budget_marketplace = sum(calc.calculate_total_marketplace_revenue().values())
+    budget_total = budget_b2b + budget_dtc + budget_marketplace
+
+    # Calculate actual totals by channel from actuals sheet
+    actual_b2b = 0
+    actual_dtc = 0
+    actual_marketplace = 0
+
+    for _, row in actuals.iterrows():
+        channel = str(row['Channel']).strip()
+        row_total = sum(row[col] for col in date_cols if col in row.index)
+
+        if channel == 'B2B':
+            actual_b2b += row_total
+        elif channel == 'DTC':
+            actual_dtc += row_total
+        elif channel == 'Marketplace':
+            actual_marketplace += row_total
+
+    actual_total = actual_b2b + actual_dtc + actual_marketplace
+
+    # Variance calculations
+    def calculate_variance(actual, budget):
+        variance = actual - budget
+        variance_pct = (variance / budget * 100) if budget != 0 else 0
+        return variance, variance_pct
+
+    def get_variance_color(variance_pct):
+        """Return color based on variance percentage"""
+        abs_var = abs(variance_pct)
+        if abs_var <= 5:
+            return "🟢"  # Green - within 5%
+        elif abs_var <= 10:
+            return "🟡"  # Yellow - 5-10%
+        else:
+            return "🔴"  # Red - >10%
+
+    # Summary metrics
+    st.markdown("### 📊 Overall Performance")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    _, var_pct_total = calculate_variance(actual_total, budget_total)
+    with col1:
+        st.metric(
+            "Total Revenue",
+            f"£{actual_total:,.0f}",
+            f"{var_pct_total:+.1f}% vs budget"
+        )
+
+    _, var_pct_b2b = calculate_variance(actual_b2b, budget_b2b)
+    with col2:
+        st.metric(
+            "B2B",
+            f"£{actual_b2b:,.0f}",
+            f"{var_pct_b2b:+.1f}%"
+        )
+
+    _, var_pct_dtc = calculate_variance(actual_dtc, budget_dtc)
+    with col3:
+        st.metric(
+            "DTC",
+            f"£{actual_dtc:,.0f}",
+            f"{var_pct_dtc:+.1f}%"
+        )
+
+    _, var_pct_mp = calculate_variance(actual_marketplace, budget_marketplace)
+    with col4:
+        st.metric(
+            "Marketplace",
+            f"£{actual_marketplace:,.0f}",
+            f"{var_pct_mp:+.1f}%"
+        )
+
+    st.markdown("---")
+
+    # Detailed variance table
+    st.markdown("### 📋 Variance Analysis")
+
+    variance_data = []
+    for channel, budget, actual in [
+        ('B2B', budget_b2b, actual_b2b),
+        ('DTC', budget_dtc, actual_dtc),
+        ('Marketplace', budget_marketplace, actual_marketplace),
+        ('**Total**', budget_total, actual_total)
+    ]:
+        variance, variance_pct = calculate_variance(actual, budget)
+        indicator = get_variance_color(variance_pct) if channel != '**Total**' else ''
+
+        variance_data.append({
+            'Channel': channel,
+            'Budget': budget,
+            'Actual': actual,
+            'Variance (£)': variance,
+            'Variance (%)': variance_pct,
+            'Status': indicator
+        })
+
+    variance_df = pd.DataFrame(variance_data)
+
+    # Format the dataframe for display
+    display_df = variance_df.copy()
+    display_df['Budget'] = display_df['Budget'].apply(lambda x: f"£{x:,.0f}")
+    display_df['Actual'] = display_df['Actual'].apply(lambda x: f"£{x:,.0f}")
+    display_df['Variance (£)'] = display_df['Variance (£)'].apply(lambda x: f"£{x:+,.0f}" if x >= 0 else f"-£{abs(x):,.0f}")
+    display_df['Variance (%)'] = display_df['Variance (%)'].apply(lambda x: f"{x:+.1f}%")
+
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    # Export variance table
+    csv = variance_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Export Variance Table",
+        data=csv,
+        file_name=f"budget_vs_actuals_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        key="export_variance_csv"
+    )
+
+    st.markdown("---")
+
+    # Monthly trend comparison
+    st.markdown("### 📈 Monthly Trends: Budget vs Actuals")
+
+    # Calculate monthly budget and actuals
+    monthly_budget = {col: 0.0 for col in date_cols}
+    monthly_actual = {col: 0.0 for col in date_cols}
+
+    # Budget monthly totals
+    for col in date_cols:
+        b2b_rev = calc.calculate_b2b_revenue()
+        dtc_rev_list = [calc.calculate_dtc_revenue(t) for t in dtc_territories]
+        mp_rev = calc.calculate_total_marketplace_revenue()
+
+        monthly_budget[col] = float(
+            b2b_rev.get(col, 0) +
+            sum(t_rev.get(col, 0) for t_rev in dtc_rev_list) +
+            mp_rev.get(col, 0)
+        )
+
+    # Actuals monthly totals
+    for col in date_cols:
+        if col in actuals.columns:
+            monthly_actual[col] = float(actuals[col].sum())
+
+    # Create line chart
+    import plotly.graph_objects as go
+
+    chart_data = pd.DataFrame({
+        'Month': date_cols,
+        'Budget': [monthly_budget[col] for col in date_cols],
+        'Actual': [monthly_actual[col] for col in date_cols]
+    })
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=chart_data['Month'],
+        y=chart_data['Budget'],
+        name='Budget',
+        mode='lines+markers',
+        line=dict(color='#1f77b4', width=2)
+    ))
+    fig.add_trace(go.Scatter(
+        x=chart_data['Month'],
+        y=chart_data['Actual'],
+        name='Actual',
+        mode='lines+markers',
+        line=dict(color='#2ca02c', width=2)
+    ))
+
+    fig.update_layout(
+        title="Monthly Revenue: Budget vs Actuals",
+        xaxis_title="Month",
+        yaxis_title="Revenue (£)",
+        hovermode='x unified',
+        height=400
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+
+    # Territory-level breakdown (if Territory column exists)
+    if 'Territory' in actuals.columns:
+        st.markdown("### 🌍 Territory Breakdown")
+
+        territories_in_actuals = actuals['Territory'].dropna().unique()
+
+        if len(territories_in_actuals) > 0:
+            selected_territory = st.selectbox(
+                "Select territory for detailed view:",
+                territories_in_actuals,
+                key="bva_territory_selector"
+            )
+
+            # Filter actuals for selected territory
+            territory_actuals = actuals[actuals['Territory'] == selected_territory]
+
+            # Calculate territory budget
+            territory_budget_b2b = sum(calc.calculate_b2b_revenue(territory=selected_territory).values())
+            territory_budget_dtc = sum(calc.calculate_dtc_revenue(selected_territory).values()) if selected_territory in dtc_territories else 0
+            territory_budget_mp = sum(calc.calculate_marketplace_revenue(selected_territory).values())
+
+            # Calculate territory actuals by channel
+            territory_actual_by_channel = {}
+            for _, row in territory_actuals.iterrows():
+                channel = str(row['Channel']).strip()
+                row_total = sum(row[col] for col in date_cols if col in row.index)
+                territory_actual_by_channel[channel] = row_total
+
+            # Display territory comparison
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                actual_b2b_terr = territory_actual_by_channel.get('B2B', 0)
+                _, var_pct_terr = calculate_variance(actual_b2b_terr, territory_budget_b2b)
+                st.metric(
+                    "B2B",
+                    f"£{actual_b2b_terr:,.0f}",
+                    f"{var_pct_terr:+.1f}% ({get_variance_color(var_pct_terr)})"
+                )
+                st.caption(f"Budget: £{territory_budget_b2b:,.0f}")
+
+            with col2:
+                actual_dtc_terr = territory_actual_by_channel.get('DTC', 0)
+                _, var_pct_terr = calculate_variance(actual_dtc_terr, territory_budget_dtc)
+                st.metric(
+                    "DTC",
+                    f"£{actual_dtc_terr:,.0f}",
+                    f"{var_pct_terr:+.1f}% ({get_variance_color(var_pct_terr)})"
+                )
+                st.caption(f"Budget: £{territory_budget_dtc:,.0f}")
+
+            with col3:
+                actual_mp_terr = territory_actual_by_channel.get('Marketplace', 0)
+                _, var_pct_terr = calculate_variance(actual_mp_terr, territory_budget_mp)
+                st.metric(
+                    "Marketplace",
+                    f"£{actual_mp_terr:,.0f}",
+                    f"{var_pct_terr:+.1f}% ({get_variance_color(var_pct_terr)})"
+                )
+                st.caption(f"Budget: £{territory_budget_mp:,.0f}")
+
+    st.markdown("---")
+    st.markdown("**Legend:** 🟢 Within ±5% | 🟡 5-10% variance | 🔴 >10% variance")
+
+
 def render_export(data):
     """Render export functionality"""
     st.markdown('<p class="main-header">⬇️ Export Data</p>', unsafe_allow_html=True)
@@ -1788,6 +2079,8 @@ def main():
         render_scenario_planning(data)
     elif page == "📈 P&L View":
         render_pl_view(data)
+    elif page == "📉 Budget vs Actuals":
+        render_budget_vs_actuals(data)
     elif page == "⬇️ Export":
         render_export(data)
 

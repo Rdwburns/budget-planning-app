@@ -254,6 +254,51 @@ class BudgetDataLoader:
         wb.close()
         return rates
 
+    def load_actuals_data(self) -> pd.DataFrame:
+        """Load actuals data from Actuals sheet if it exists"""
+        try:
+            wb = load_workbook(self.file_path, read_only=True, data_only=True)
+
+            # Check if Actuals sheet exists
+            if 'Actuals' not in wb.sheetnames:
+                wb.close()
+                return pd.DataFrame()
+
+            # Read the Actuals sheet
+            df = pd.read_excel(self.file_path, sheet_name='Actuals', header=0)
+
+            # Clean column names - convert datetime to string
+            new_cols = []
+            for col in df.columns:
+                if isinstance(col, datetime):
+                    new_cols.append(col.strftime('%Y-%m'))
+                else:
+                    new_cols.append(str(col))
+            df.columns = new_cols
+
+            # Expected columns: Channel, Territory (optional), then date columns
+            # Validate structure
+            required_cols = ['Channel']
+            if not all(c in df.columns for c in required_cols):
+                print("Warning: Actuals sheet missing required columns")
+                wb.close()
+                return pd.DataFrame()
+
+            # Get date columns and convert to numeric
+            date_cols = [c for c in df.columns if c.startswith('202')]
+            for col in date_cols:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+            # Filter to FY27 period (2026-02 to 2027-01)
+            df = self.filter_fy27_columns(df)
+
+            wb.close()
+            return df
+
+        except Exception as e:
+            print(f"Error loading actuals data: {e}")
+            return pd.DataFrame()
+
 
 def validate_data(data: dict) -> list:
     """Validate loaded data and return list of warnings"""
@@ -311,6 +356,7 @@ def load_all_data(file_path: str) -> dict:
         'fulfilment': loader.load_fulfilment_rates(),
         'amazon': loader.load_amazon_data(),
         'cogs_rates': loader.load_cogs_rates(),
+        'actuals': loader.load_actuals_data(),
         'dates': loader.get_date_columns(),
         'territories': loader.territories,
         'territory_groups': loader.territory_groups,
