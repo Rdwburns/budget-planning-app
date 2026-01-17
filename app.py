@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #9b59b6; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #e67e22; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '🟣 Version 1.0.9 - Country Group Fix'
+            '🟠 Version 1.0.10 - Full P&L Structure'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1661,19 +1661,19 @@ def render_pl_view(data):
     # Show diagnostic info in an expander
     with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=True):
         st.write(f"**pl_calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.9")
+        st.write(f"**Expected version**: 1.0.10")
 
-        if calc_version == "1.0.9":
-            st.success("✅ Version 1.0.9 loaded - Country Group categorization deployed")
-            st.info("Other EU now uses Country Group (EE+CE), ROW uses Country Group (ROW). Check territory breakdown.")
+        if calc_version == "1.0.10":
+            st.success("✅ Version 1.0.10 loaded - Full P&L structure with Marketing and CM3 deployed")
+            st.info("P&L now includes Marketing breakdown, CM3, Other Overheads breakdown, and Other Expenses. EBITDA should now match Excel!")
+        elif calc_version == "1.0.9":
+            st.warning("⚠️ Version 1.0.9 - Missing Marketing breakdown and CM3. Need 1.0.10 for complete P&L structure.")
         elif calc_version == "1.0.8":
-            st.warning("⚠️ Version 1.0.8 - Other EU captured all unmapped countries. Need 1.0.9 for Country Group filtering.")
+            st.warning("⚠️ Version 1.0.8 - Old structure, need 1.0.10")
         elif calc_version == "1.0.7":
-            st.warning("⚠️ Version 1.0.7 - Partial fix only. Need to update to 1.0.9")
-        elif calc_version in ["1.0.6", "1.0.5"]:
-            st.warning(f"⚠️ Version {calc_version} - Old version, need 1.0.9")
+            st.warning("⚠️ Version 1.0.7 - Old structure, need 1.0.10")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.9, got {calc_version}")
+            st.error(f"❌ Wrong version! Expected 1.0.10, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")
@@ -1753,21 +1753,35 @@ def render_pl_view(data):
         # Format for display
         display_pl = pl.copy()
 
-        # Apply number formatting
+        # Apply number formatting (currency for most rows, percentage for CM% rows)
         for col in display_pl.columns:
-            display_pl[col] = display_pl[col].apply(format_currency)
+            # Check if this is a percentage category
+            is_percentage_row = display_pl.index.get_level_values(0).isin(['CM1%', 'CM2%', 'CM3%'])
+
+            # Format each value based on its category
+            formatted_values = []
+            for idx, value in zip(display_pl.index, display_pl[col]):
+                category = idx[0]  # First level of multi-index is Category
+                if category in ['CM1%', 'CM2%', 'CM3%']:
+                    # Format as percentage
+                    formatted_values.append(f"{value:.1f}%")
+                else:
+                    # Format as currency
+                    formatted_values.append(format_currency(value))
+
+            display_pl[col] = formatted_values
 
         st.dataframe(
             display_pl,
             width="stretch",
-            height=600
+            height=800  # Increased height for longer P&L
         )
 
         # Summary metrics - Calculate actual values from P&L data
         st.markdown("---")
         st.markdown("### 📊 Key Metrics (Calculated from P&L)")
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
 
         # Get totals from actual P&L data
         date_cols = [c for c in pl.columns if c.startswith('202')]
@@ -1781,9 +1795,9 @@ def render_pl_view(data):
                 total_cm1 = pl.loc[('CM1', 'Total CM1'), date_cols].sum()
                 cm1_pct = total_cm1 / total_rev * 100 if total_rev > 0 else 0
                 st.metric(
-                    "Contribution Margin 1",
+                    "CM1",
                     f"£{total_cm1/1e6:.1f}M",
-                    delta=f"{cm1_pct:.1f}% of revenue"
+                    delta=f"{cm1_pct:.1f}%"
                 )
 
         with col3:
@@ -1791,19 +1805,29 @@ def render_pl_view(data):
                 total_cm2 = pl.loc[('CM2', 'Total CM2'), date_cols].sum()
                 cm2_pct = total_cm2 / total_rev * 100 if total_rev > 0 else 0
                 st.metric(
-                    "Contribution Margin 2",
+                    "CM2",
                     f"£{total_cm2/1e6:.1f}M",
-                    delta=f"{cm2_pct:.1f}% of revenue"
+                    delta=f"{cm2_pct:.1f}%"
                 )
 
         with col4:
+            if ('CM3', 'Total CM3') in pl.index:
+                total_cm3 = pl.loc[('CM3', 'Total CM3'), date_cols].sum()
+                cm3_pct = total_cm3 / total_rev * 100 if total_rev > 0 else 0
+                st.metric(
+                    "CM3",
+                    f"£{total_cm3/1e6:.1f}M",
+                    delta=f"{cm3_pct:.1f}%"
+                )
+
+        with col5:
             if ('EBITDA', 'EBITDA') in pl.index:
                 ebitda = pl.loc[('EBITDA', 'EBITDA'), date_cols].sum()
                 ebitda_margin = ebitda / total_rev * 100 if total_rev > 0 else 0
                 st.metric(
                     "EBITDA",
                     f"£{ebitda/1e6:.1f}M",
-                    delta=f"{ebitda_margin:.1f}% margin"
+                    delta=f"{ebitda_margin:.1f}%"
                 )
 
         # Subscription Revenue Breakdown

@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.9 - Use Country Group column for Other EU (EE+CE) and ROW
-__version__ = "1.0.9"
+# Version: 1.0.10 - Add full P&L structure (Marketing, CM3, Other Overheads breakdown, Other Expenses)
+__version__ = "1.0.10"
 
 @dataclass
 class PLLineItem:
@@ -270,8 +270,8 @@ class PLCalculator:
 
         return {k: v * rate for k, v in revenue.items()}
 
-    def calculate_overheads(self, territory: str = None, function: str = None) -> Dict[str, float]:
-        """Calculate overhead costs"""
+    def calculate_overheads(self, territory: str = None, function: str = None, category: str = None) -> Dict[str, float]:
+        """Calculate overhead costs, optionally filtered by territory, function, or category"""
         oh = self.data.get('overheads', pd.DataFrame())
         if oh.empty:
             return {d: 0 for d in self.dates}
@@ -287,6 +287,8 @@ class PLCalculator:
             ]
         if function:
             filtered = filtered[filtered['Function'] == function]
+        if category:
+            filtered = filtered[filtered['Category'] == category]
 
         result = {}
         for col in self.dates:
@@ -295,6 +297,75 @@ class PLCalculator:
                 result[col] = val
 
         return result
+
+    def calculate_marketing_costs(self, territory: str = None) -> Dict[str, Dict[str, float]]:
+        """
+        Calculate marketing costs broken down by category
+        Returns dict of {category_name: {month: value}}
+        """
+        oh = self.data.get('overheads', pd.DataFrame())
+        if oh.empty or 'Category' not in oh.columns:
+            return {}
+
+        # Marketing categories from Excel P&L structure
+        marketing_categories = [
+            'D2C Model Marketing',
+            'D2C Model Brand',
+            'Paid Social',
+            'Paid Search/App',
+            'Retros',
+            'Promo Cards',
+            'Trade Shows',
+            'Marketplace Marketing',
+            'TikTok Marketing'
+        ]
+
+        result = {}
+        for category in marketing_categories:
+            monthly_values = self.calculate_overheads(territory=territory, category=category)
+            # Only include if there's non-zero values
+            if sum(abs(v) for v in monthly_values.values()) > 0:
+                result[category] = monthly_values
+
+        return result
+
+    def calculate_other_overhead_costs(self, territory: str = None) -> Dict[str, Dict[str, float]]:
+        """
+        Calculate other overhead costs broken down by category
+        Returns dict of {category_name: {month: value}}
+        """
+        oh = self.data.get('overheads', pd.DataFrame())
+        if oh.empty or 'Category' not in oh.columns:
+            return {}
+
+        # Other Overhead categories from Excel P&L structure
+        overhead_categories = [
+            'People',
+            'Freelancers',
+            'Contractors',
+            'Travel & Expenses',
+            'Telephone & Computer',
+            'Rent',
+            'Office Costs',
+            'Legal & Government',
+            'Recruitment'
+        ]
+
+        result = {}
+        for category in overhead_categories:
+            monthly_values = self.calculate_overheads(territory=territory, category=category)
+            # Only include if there's non-zero values
+            if sum(abs(v) for v in monthly_values.values()) > 0:
+                result[category] = monthly_values
+
+        return result
+
+    def calculate_other_expenses(self, territory: str = None) -> Dict[str, float]:
+        """
+        Calculate Other Expenses (post-EBITDA costs)
+        Returns {month: value}
+        """
+        return self.calculate_overheads(territory=territory, category='Other Expenses')
 
     def calculate_territory_pl(self, territory: str, debug=False) -> pd.DataFrame:
         """Calculate full P&L for a territory"""
@@ -336,6 +407,17 @@ class PLCalculator:
         total_cm1 = {k: dtc_cm1.get(k, 0) + b2b_cm1.get(k, 0) + mp_cm1.get(k, 0) for k in self.dates}
         rows.append({'Line': 'Total CM1', 'Category': 'CM1', **total_cm1})
 
+        # CM1% (percentage of revenue)
+        dtc_cm1_pct = {k: (dtc_cm1.get(k, 0) / dtc_rev.get(k, 1)) * 100 if dtc_rev.get(k, 0) != 0 else 0 for k in self.dates}
+        b2b_cm1_pct = {k: (b2b_cm1.get(k, 0) / b2b_rev.get(k, 1)) * 100 if b2b_rev.get(k, 0) != 0 else 0 for k in self.dates}
+        mp_cm1_pct = {k: (mp_cm1.get(k, 0) / mp_rev.get(k, 1)) * 100 if mp_rev.get(k, 0) != 0 else 0 for k in self.dates}
+        total_cm1_pct = {k: (total_cm1.get(k, 0) / total_rev.get(k, 1)) * 100 if total_rev.get(k, 0) != 0 else 0 for k in self.dates}
+
+        rows.append({'Line': 'DTC CM1%', 'Category': 'CM1%', **dtc_cm1_pct})
+        rows.append({'Line': 'B2B CM1%', 'Category': 'CM1%', **b2b_cm1_pct})
+        rows.append({'Line': 'Marketplace CM1%', 'Category': 'CM1%', **mp_cm1_pct})
+        rows.append({'Line': 'Total CM1%', 'Category': 'CM1%', **total_cm1_pct})
+
         # Fulfilment
         dtc_ful = self.calculate_fulfilment(dtc_rev, territory, 'DTC')
         b2b_ful = self.calculate_fulfilment(b2b_rev, territory, 'B2B')
@@ -349,16 +431,76 @@ class PLCalculator:
         rows.append({'Line': 'Total Fulfilment', 'Category': 'Fulfilment', **total_ful})
 
         # CM2
+        dtc_cm2 = {k: dtc_cm1.get(k, 0) + dtc_ful.get(k, 0) for k in self.dates}
+        b2b_cm2 = {k: b2b_cm1.get(k, 0) + b2b_ful.get(k, 0) for k in self.dates}
+        mp_cm2 = {k: mp_cm1.get(k, 0) + mp_ful.get(k, 0) for k in self.dates}
         total_cm2 = {k: total_cm1.get(k, 0) + total_ful.get(k, 0) for k in self.dates}
+
+        rows.append({'Line': 'DTC CM2', 'Category': 'CM2', **dtc_cm2})
+        rows.append({'Line': 'B2B CM2', 'Category': 'CM2', **b2b_cm2})
+        rows.append({'Line': 'Marketplace CM2', 'Category': 'CM2', **mp_cm2})
         rows.append({'Line': 'Total CM2', 'Category': 'CM2', **total_cm2})
 
-        # Overheads
-        overheads = self.calculate_overheads(territory=territory)
-        rows.append({'Line': 'Overheads', 'Category': 'Overheads', **overheads})
+        # CM2% (percentage of revenue)
+        dtc_cm2_pct = {k: (dtc_cm2.get(k, 0) / dtc_rev.get(k, 1)) * 100 if dtc_rev.get(k, 0) != 0 else 0 for k in self.dates}
+        b2b_cm2_pct = {k: (b2b_cm2.get(k, 0) / b2b_rev.get(k, 1)) * 100 if b2b_rev.get(k, 0) != 0 else 0 for k in self.dates}
+        mp_cm2_pct = {k: (mp_cm2.get(k, 0) / mp_rev.get(k, 1)) * 100 if mp_rev.get(k, 0) != 0 else 0 for k in self.dates}
+        total_cm2_pct = {k: (total_cm2.get(k, 0) / total_rev.get(k, 1)) * 100 if total_rev.get(k, 0) != 0 else 0 for k in self.dates}
 
-        # EBITDA
-        ebitda = {k: total_cm2.get(k, 0) + overheads.get(k, 0) for k in self.dates}
+        rows.append({'Line': 'DTC CM2%', 'Category': 'CM2%', **dtc_cm2_pct})
+        rows.append({'Line': 'B2B CM2%', 'Category': 'CM2%', **b2b_cm2_pct})
+        rows.append({'Line': 'Marketplace CM2%', 'Category': 'CM2%', **mp_cm2_pct})
+        rows.append({'Line': 'Total CM2%', 'Category': 'CM2%', **total_cm2_pct})
+
+        # Marketing costs breakdown
+        marketing_costs = self.calculate_marketing_costs(territory)
+        for category_name, monthly_values in marketing_costs.items():
+            rows.append({'Line': category_name, 'Category': 'Marketing', **monthly_values})
+
+        total_marketing = {k: sum(cat.get(k, 0) for cat in marketing_costs.values()) for k in self.dates}
+        rows.append({'Line': 'Total Marketing', 'Category': 'Marketing', **total_marketing})
+
+        # CM3 (CM2 - Marketing)
+        dtc_cm3 = {k: dtc_cm2.get(k, 0) + sum(marketing_costs.get(cat, {}).get(k, 0) for cat in marketing_costs.keys()) for k in self.dates}
+        b2b_cm3 = {k: b2b_cm2.get(k, 0) for k in self.dates}  # B2B doesn't have marketing deduction
+        mp_cm3 = {k: mp_cm2.get(k, 0) for k in self.dates}  # Marketplace doesn't have marketing deduction
+        total_cm3 = {k: total_cm2.get(k, 0) + total_marketing.get(k, 0) for k in self.dates}  # Marketing is negative
+
+        rows.append({'Line': 'DTC CM3', 'Category': 'CM3', **dtc_cm3})
+        rows.append({'Line': 'B2B CM3', 'Category': 'CM3', **b2b_cm3})
+        rows.append({'Line': 'Marketplace CM3', 'Category': 'CM3', **mp_cm3})
+        rows.append({'Line': 'Total CM3', 'Category': 'CM3', **total_cm3})
+
+        # CM3% (percentage of revenue)
+        dtc_cm3_pct = {k: (dtc_cm3.get(k, 0) / dtc_rev.get(k, 1)) * 100 if dtc_rev.get(k, 0) != 0 else 0 for k in self.dates}
+        b2b_cm3_pct = {k: (b2b_cm3.get(k, 0) / b2b_rev.get(k, 1)) * 100 if b2b_rev.get(k, 0) != 0 else 0 for k in self.dates}
+        mp_cm3_pct = {k: (mp_cm3.get(k, 0) / mp_rev.get(k, 1)) * 100 if mp_rev.get(k, 0) != 0 else 0 for k in self.dates}
+        total_cm3_pct = {k: (total_cm3.get(k, 0) / total_rev.get(k, 1)) * 100 if total_rev.get(k, 0) != 0 else 0 for k in self.dates}
+
+        rows.append({'Line': 'DTC CM3%', 'Category': 'CM3%', **dtc_cm3_pct})
+        rows.append({'Line': 'B2B CM3%', 'Category': 'CM3%', **b2b_cm3_pct})
+        rows.append({'Line': 'Marketplace CM3%', 'Category': 'CM3%', **mp_cm3_pct})
+        rows.append({'Line': 'Total CM3%', 'Category': 'CM3%', **total_cm3_pct})
+
+        # Other Overheads breakdown
+        overhead_costs = self.calculate_other_overhead_costs(territory)
+        for category_name, monthly_values in overhead_costs.items():
+            rows.append({'Line': category_name, 'Category': 'Other Overheads', **monthly_values})
+
+        total_overheads = {k: sum(cat.get(k, 0) for cat in overhead_costs.values()) for k in self.dates}
+        rows.append({'Line': 'Total Other Overheads', 'Category': 'Other Overheads', **total_overheads})
+
+        # EBITDA (CM3 - Other Overheads)
+        ebitda = {k: total_cm3.get(k, 0) + total_overheads.get(k, 0) for k in self.dates}  # Overheads are negative
         rows.append({'Line': 'EBITDA', 'Category': 'EBITDA', **ebitda})
+
+        # Other Expenses
+        other_expenses = self.calculate_other_expenses(territory)
+        rows.append({'Line': 'Other Expenses', 'Category': 'Other Expenses', **other_expenses})
+
+        # Final Result (EBITDA - Other Expenses)
+        final_result = {k: ebitda.get(k, 0) + other_expenses.get(k, 0) for k in self.dates}  # Other Expenses are negative
+        rows.append({'Line': 'Final Result', 'Category': 'Final', **final_result})
 
         df = pd.DataFrame(rows)
         df = df.set_index(['Category', 'Line'])
