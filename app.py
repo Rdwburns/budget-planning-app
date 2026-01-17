@@ -13,6 +13,12 @@ from datetime import datetime
 # Import our modules
 from data_loader import load_all_data, BudgetDataLoader
 from calculations import PLCalculator, format_currency, format_percentage
+from features_phase1 import (
+    render_comments_system,
+    render_assumptions_register,
+    render_data_quality_dashboard,
+    render_waterfall_analysis
+)
 
 # Page config
 st.set_page_config(
@@ -104,7 +110,9 @@ def render_sidebar():
             "Navigate to",
             ["📊 Dashboard", "💰 Revenue Inputs", "📦 B2B Management",
              "💸 Cost Management", "🎯 Scenario Planning", "📈 P&L View",
-             "📉 Budget vs Actuals", "📚 Version Control", "📈 Sensitivity Analysis", "⬇️ Export"],
+             "📉 Budget vs Actuals", "📚 Version Control", "📈 Sensitivity Analysis",
+             "📝 Comments & Notes", "📋 Assumptions", "🛡️ Data Quality", "💧 Waterfall Analysis",
+             "⬇️ Export"],
             label_visibility="collapsed"
         )
 
@@ -2722,6 +2730,14 @@ def main():
         render_version_control(data)
     elif page == "📈 Sensitivity Analysis":
         render_sensitivity_analysis(data)
+    elif page == "📝 Comments & Notes":
+        render_comments_system(data)
+    elif page == "📋 Assumptions":
+        render_assumptions_register(data)
+    elif page == "🛡️ Data Quality":
+        render_data_quality_dashboard(data)
+    elif page == "💧 Waterfall Analysis":
+        render_waterfall_analysis(data)
     elif page == "⬇️ Export":
         render_export(data)
 
