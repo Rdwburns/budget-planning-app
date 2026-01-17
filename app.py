@@ -1,6 +1,7 @@
 """
 Budget Planning & Forecasting App
 A Streamlit application for FY26-27 budget management
+Version: 1.0.1 - Critical P&L calculation fixes deployed
 """
 import streamlit as st
 import pandas as pd
