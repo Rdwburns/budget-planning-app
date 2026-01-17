@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #3498db; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #9b59b6; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '🔵 Version 1.0.8 - Grouping Territory Fix'
+            '🟣 Version 1.0.9 - Country Group Fix'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1661,17 +1661,19 @@ def render_pl_view(data):
     # Show diagnostic info in an expander
     with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=True):
         st.write(f"**pl_calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.8")
+        st.write(f"**Expected version**: 1.0.9")
 
-        if calc_version == "1.0.8":
-            st.success("✅ Version 1.0.8 loaded - Grouping territory aggregation deployed")
-            st.info("US, Other EU aggregation should now capture remaining revenue! Check territory breakdown.")
+        if calc_version == "1.0.9":
+            st.success("✅ Version 1.0.9 loaded - Country Group categorization deployed")
+            st.info("Other EU now uses Country Group (EE+CE), ROW uses Country Group (ROW). Check territory breakdown.")
+        elif calc_version == "1.0.8":
+            st.warning("⚠️ Version 1.0.8 - Other EU captured all unmapped countries. Need 1.0.9 for Country Group filtering.")
         elif calc_version == "1.0.7":
-            st.warning("⚠️ Version 1.0.7 - Partial fix only. Need to update to 1.0.8")
+            st.warning("⚠️ Version 1.0.7 - Partial fix only. Need to update to 1.0.9")
         elif calc_version in ["1.0.6", "1.0.5"]:
-            st.warning(f"⚠️ Version {calc_version} - Old version, need 1.0.8")
+            st.warning(f"⚠️ Version {calc_version} - Old version, need 1.0.9")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.8, got {calc_version}")
+            st.error(f"❌ Wrong version! Expected 1.0.9, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")

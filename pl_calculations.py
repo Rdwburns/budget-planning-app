@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.8 - Add grouping territory aggregation (US, Other EU, ROW)
-__version__ = "1.0.8"
+# Version: 1.0.9 - Use Country Group column for Other EU (EE+CE) and ROW
+__version__ = "1.0.9"
 
 @dataclass
 class PLLineItem:
@@ -61,18 +61,23 @@ class PLCalculator:
                 b2b = b2b_original[b2b_original['Country'].isin(['United States', 'US', 'USA'])].copy()
                 search_attempts = "United States OR US OR USA"
             elif territory == 'Other EU':
-                # Aggregate all EU countries NOT explicitly mapped
-                explicit_countries = list(self.territory_to_country.values()) + list(self.territory_to_country.keys())
-                # Get all countries, exclude explicit ones, exclude US/ROW
-                all_countries = b2b_original['Country'].unique() if 'Country' in b2b_original.columns else []
-                other_eu_countries = [c for c in all_countries if c not in explicit_countries and c not in ['United States', 'US', 'USA']]
-                # Filter to likely EU countries (this is approximate - includes some non-EU)
-                b2b = b2b_original[b2b_original['Country'].isin(other_eu_countries)].copy()
-                search_attempts = f"OTHER EU (aggregating {len(other_eu_countries)} unmapped countries)"
+                # Aggregate Eastern Europe (EE) and Central Europe (CE) from Country Group column
+                if 'Country Group' in b2b_original.columns:
+                    b2b = b2b_original[b2b_original['Country Group'].isin(['EE', 'CE'])].copy()
+                    ee_countries = b2b[b2b['Country Group'] == 'EE']['Country'].unique().tolist() if len(b2b) > 0 else []
+                    ce_countries = b2b[b2b['Country Group'] == 'CE']['Country'].unique().tolist() if len(b2b) > 0 else []
+                    search_attempts = f"OTHER EU (Country Group = EE or CE): {len(ee_countries)} EE + {len(ce_countries)} CE countries"
+                else:
+                    b2b = pd.DataFrame()  # No Country Group column
+                    search_attempts = "OTHER EU (ERROR: No Country Group column found)"
             elif territory == 'ROW':
-                # For now, ROW is empty - would need Country Group or explicit list
-                b2b = b2b_original[b2b_original['Country'] == 'ROW'].copy()  # Unlikely to exist
-                search_attempts = "ROW (Rest of World)"
+                # Rest of World from Country Group column
+                if 'Country Group' in b2b_original.columns:
+                    b2b = b2b_original[b2b_original['Country Group'] == 'ROW'].copy()
+                    search_attempts = f"ROW (Country Group = ROW)"
+                else:
+                    b2b = pd.DataFrame()  # No Country Group column
+                    search_attempts = "ROW (ERROR: No Country Group column found)"
             else:
                 # Standard territory handling
                 # TRY BOTH: Excel B2B sheet is inconsistent (some use codes, some use full names)
@@ -92,12 +97,22 @@ class PLCalculator:
                 self._b2b_debug = self._b2b_debug if hasattr(self, '_b2b_debug') else {}
                 available_countries = b2b_original['Country'].unique().tolist() if 'Country' in b2b_original.columns else []
                 revenue_found = sum([pd.to_numeric(b2b[col], errors='coerce').sum() for col in self.dates if col in b2b.columns])
+
+                # Get matched countries with their country groups
+                countries_matched = []
+                if len(b2b) > 0 and 'Country' in b2b.columns:
+                    if 'Country Group' in b2b.columns:
+                        for _, row in b2b[['Country', 'Country Group']].drop_duplicates().iterrows():
+                            countries_matched.append(f"{row['Country']} ({row['Country Group']})")
+                    else:
+                        countries_matched = b2b['Country'].unique().tolist()
+
                 self._b2b_debug[territory] = {
                     'searching_for': search_attempts,
                     'available_in_excel': available_countries,
                     'found': len(b2b) > 0,
                     'revenue': revenue_found,
-                    'countries_matched': b2b['Country'].unique().tolist() if len(b2b) > 0 and 'Country' in b2b.columns else []
+                    'countries_matched': countries_matched
                 }
         elif country_group:
             b2b = b2b[b2b['Country Group'] == country_group]
