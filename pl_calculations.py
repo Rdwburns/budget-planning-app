@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.13 - Fix marketing extraction from correct data sources
-__version__ = "1.0.13"
+# Version: 1.0.14 - Add marketing extraction debug output
+__version__ = "1.0.14"
 
 @dataclass
 class PLLineItem:
@@ -388,6 +388,17 @@ class PLCalculator:
                     result['Marketplace Marketing'][month] = amazon_marketing[month]
 
         # 5. Paid Social, Paid Search/App, TikTok Marketing remain £0 (already initialized)
+
+        # DEBUG: Store marketing extraction details for diagnostics
+        if not hasattr(self, '_marketing_debug'):
+            self._marketing_debug = {}
+            for category, monthly_vals in result.items():
+                annual_total = sum(monthly_vals.values())
+                if annual_total != 0:
+                    self._marketing_debug[category] = {
+                        'annual_total': annual_total,
+                        'sample_month': list(monthly_vals.values())[0] if monthly_vals else 0
+                    }
 
         # Remove categories with all zero values to keep output clean
         result = {k: v for k, v in result.items() if sum(abs(val) for val in v.values()) > 0}

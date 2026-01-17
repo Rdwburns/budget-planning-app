@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #27ae60; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #f39c12; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '✅ Version 1.0.13 - Marketing Fix'
+            '🔍 Version 1.0.14 - Marketing Debug'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1661,15 +1661,15 @@ def render_pl_view(data):
     # Show diagnostic info in an expander
     with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=True):
         st.write(f"**pl_calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.13")
+        st.write(f"**Expected version**: 1.0.14")
 
-        if calc_version == "1.0.13":
-            st.success("✅ Version 1.0.13 loaded - Marketing extraction fixed!")
-            st.info("Marketing now extracted from: DTC sheets (Marketing Budget + Brand Spend), B2B sheet (Retros, Promo Cards, Trade Shows), Amazon sheet (Marketplace Marketing)")
-        elif calc_version == "1.0.12":
-            st.warning("⚠️ Version 1.0.12 - Need 1.0.13 for marketing fix.")
+        if calc_version == "1.0.14":
+            st.success("✅ Version 1.0.14 loaded - Debug mode to diagnose marketing values")
+            st.info("Check 'Marketing Extraction Debug' below to see what values are being extracted and their signs (+/-)")
+        elif calc_version == "1.0.13":
+            st.warning("⚠️ Version 1.0.13 - Need 1.0.14 for debug output.")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.13, got {calc_version}")
+            st.error(f"❌ Wrong version! Expected 1.0.14, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")
@@ -1745,6 +1745,31 @@ def render_pl_view(data):
 
                     total_debug_rev = sum(calc._debug_territory_revenues.values())
                     st.metric("Total from all territories", format_currency(total_debug_rev))
+
+            # Show marketing extraction debug
+            if hasattr(calc, '_marketing_debug'):
+                with st.expander("💰 Marketing Extraction Debug", expanded=True):
+                    st.write("**Marketing costs extracted from Excel:**")
+                    if calc._marketing_debug:
+                        debug_df = pd.DataFrame([
+                            {'Category': cat, 'Annual Total': format_currency(info['annual_total']),
+                             'Sample Month Value': format_currency(info['sample_month'])}
+                            for cat, info in calc._marketing_debug.items()
+                        ])
+                        st.dataframe(debug_df, use_container_width=True, hide_index=True)
+
+                        total_marketing_extracted = sum(info['annual_total'] for info in calc._marketing_debug.values())
+                        st.metric("Total Marketing Extracted", format_currency(total_marketing_extracted))
+
+                        if total_marketing_extracted > 0:
+                            st.error("⚠️ Marketing costs are POSITIVE - they should be NEGATIVE! "
+                                   "Need to apply negative sign in extraction logic.")
+                        elif total_marketing_extracted < 0:
+                            st.success(f"✅ Marketing costs are negative (expenses) - correct sign!")
+                        else:
+                            st.warning("⚠️ Total Marketing = £0 - no marketing costs extracted!")
+                    else:
+                        st.warning("No marketing data extracted!")
 
         # Format for display
         display_pl = pl.copy()
