@@ -93,7 +93,7 @@ def render_sidebar():
             "Navigate to",
             ["📊 Dashboard", "💰 Revenue Inputs", "📦 B2B Management",
              "💸 Cost Management", "🎯 Scenario Planning", "📈 P&L View",
-             "📉 Budget vs Actuals", "⬇️ Export"],
+             "📉 Budget vs Actuals", "📚 Version Control", "⬇️ Export"],
             label_visibility="collapsed"
         )
 
@@ -130,6 +130,48 @@ def render_sidebar():
                     with st.expander("⚠️ Data Validation Warnings", expanded=False):
                         for warning in warnings:
                             st.warning(warning)
+
+            st.markdown("---")
+
+            # Version Control quick actions
+            st.subheader("📚 Version Control")
+
+            # Initialize version storage
+            if 'budget_versions' not in st.session_state:
+                st.session_state.budget_versions = []
+
+            # Quick save version
+            with st.expander("💾 Save Version", expanded=False):
+                version_name = st.text_input(
+                    "Version name:",
+                    placeholder="e.g., Q1 Final",
+                    key="quick_save_version_name"
+                )
+                version_notes = st.text_area(
+                    "Notes (optional):",
+                    placeholder="Describe changes in this version",
+                    key="quick_save_version_notes",
+                    height=80
+                )
+                if st.button("Save Current Version", key="quick_save_version_btn"):
+                    if version_name:
+                        import copy
+                        version = {
+                            'name': version_name,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            'notes': version_notes,
+                            'data': copy.deepcopy(st.session_state.data)
+                        }
+                        st.session_state.budget_versions.append(version)
+                        st.success(f"✅ Saved version: {version_name}")
+                        st.rerun()
+                    else:
+                        st.error("Please enter a version name")
+
+            # Show saved versions count
+            if st.session_state.budget_versions:
+                st.info(f"📦 {len(st.session_state.budget_versions)} saved version(s)")
+                st.caption("Go to Version Control page to manage versions")
 
         return page
 
@@ -1985,6 +2027,302 @@ def render_budget_vs_actuals(data):
     st.markdown("**Legend:** 🟢 Within ±5% | 🟡 5-10% variance | 🔴 >10% variance")
 
 
+def render_version_control(data):
+    """Render version control page for managing budget versions"""
+    st.markdown('<p class="main-header">📚 Version Control</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">Save, compare, and manage budget versions</p>', unsafe_allow_html=True)
+
+    if not data:
+        st.warning("Please upload a budget file first")
+        return
+
+    # Initialize version storage
+    if 'budget_versions' not in st.session_state:
+        st.session_state.budget_versions = []
+
+    st.markdown("---")
+
+    # Tabs for different version control operations
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 All Versions", "💾 Save New Version", "🔄 Compare Versions", "📜 Change Log"])
+
+    with tab1:
+        st.markdown("### 📦 Saved Versions")
+
+        if not st.session_state.budget_versions:
+            st.info("No versions saved yet. Use the 'Save New Version' tab to create your first version.")
+        else:
+            # Display versions in a table
+            versions_display = []
+            for idx, version in enumerate(st.session_state.budget_versions):
+                versions_display.append({
+                    'Index': idx,
+                    'Name': version['name'],
+                    'Saved': version['timestamp'],
+                    'Notes': version['notes'][:50] + "..." if len(version['notes']) > 50 else version['notes']
+                })
+
+            versions_df = pd.DataFrame(versions_display)
+            st.dataframe(versions_df[['Name', 'Saved', 'Notes']], use_container_width=True, hide_index=True)
+
+            st.markdown("### 🔧 Version Actions")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Load Version (Rollback)**")
+                selected_version_load = st.selectbox(
+                    "Select version to load:",
+                    range(len(st.session_state.budget_versions)),
+                    format_func=lambda i: f"{st.session_state.budget_versions[i]['name']} ({st.session_state.budget_versions[i]['timestamp']})",
+                    key="load_version_selector"
+                )
+
+                if st.button("🔄 Load This Version", key="load_version_btn"):
+                    import copy
+                    # Create a backup of current state before loading
+                    backup_name = f"Auto-backup before loading {st.session_state.budget_versions[selected_version_load]['name']}"
+                    backup_version = {
+                        'name': backup_name,
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'notes': "Automatic backup created before version rollback",
+                        'data': copy.deepcopy(st.session_state.data)
+                    }
+                    st.session_state.budget_versions.append(backup_version)
+
+                    # Load the selected version
+                    st.session_state.data = copy.deepcopy(
+                        st.session_state.budget_versions[selected_version_load]['data']
+                    )
+                    st.success(f"✅ Loaded version: {st.session_state.budget_versions[selected_version_load]['name']}")
+                    st.info(f"💾 Auto-backup created: {backup_name}")
+                    st.rerun()
+
+            with col2:
+                st.markdown("**Delete Version**")
+                selected_version_delete = st.selectbox(
+                    "Select version to delete:",
+                    range(len(st.session_state.budget_versions)),
+                    format_func=lambda i: f"{st.session_state.budget_versions[i]['name']} ({st.session_state.budget_versions[i]['timestamp']})",
+                    key="delete_version_selector"
+                )
+
+                if st.button("🗑️ Delete This Version", key="delete_version_btn"):
+                    deleted_name = st.session_state.budget_versions[selected_version_delete]['name']
+                    del st.session_state.budget_versions[selected_version_delete]
+                    st.success(f"✅ Deleted version: {deleted_name}")
+                    st.rerun()
+
+    with tab2:
+        st.markdown("### 💾 Save New Version")
+        st.markdown("Create a snapshot of the current budget state")
+
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            version_name = st.text_input(
+                "Version name *",
+                placeholder="e.g., Q1 Final, Pre-Board Review, V2.1",
+                key="save_new_version_name"
+            )
+
+        with col2:
+            version_tag = st.selectbox(
+                "Tag (optional)",
+                ["None", "Draft", "Final", "Approved", "Review"],
+                key="save_new_version_tag"
+            )
+
+        version_notes = st.text_area(
+            "Notes",
+            placeholder="Describe what changed in this version...",
+            key="save_new_version_notes",
+            height=120
+        )
+
+        if st.button("💾 Save Current State as New Version", key="save_new_version_btn", type="primary"):
+            if version_name:
+                import copy
+                full_name = f"{version_name} [{version_tag}]" if version_tag != "None" else version_name
+                version = {
+                    'name': full_name,
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'notes': version_notes,
+                    'data': copy.deepcopy(st.session_state.data),
+                    'tag': version_tag
+                }
+                st.session_state.budget_versions.append(version)
+                st.success(f"✅ Saved version: {full_name}")
+                st.rerun()
+            else:
+                st.error("Please enter a version name")
+
+    with tab3:
+        st.markdown("### 🔄 Compare Versions")
+        st.markdown("See what changed between two versions")
+
+        if len(st.session_state.budget_versions) < 2:
+            st.info("You need at least 2 saved versions to compare. Save more versions to enable comparison.")
+        else:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                version_a_idx = st.selectbox(
+                    "Version A (older):",
+                    range(len(st.session_state.budget_versions)),
+                    format_func=lambda i: f"{st.session_state.budget_versions[i]['name']} ({st.session_state.budget_versions[i]['timestamp']})",
+                    key="compare_version_a"
+                )
+
+            with col2:
+                version_b_idx = st.selectbox(
+                    "Version B (newer):",
+                    range(len(st.session_state.budget_versions)),
+                    format_func=lambda i: f"{st.session_state.budget_versions[i]['name']} ({st.session_state.budget_versions[i]['timestamp']})",
+                    index=min(1, len(st.session_state.budget_versions) - 1),
+                    key="compare_version_b"
+                )
+
+            if st.button("🔍 Compare Versions", key="compare_versions_btn", type="primary"):
+                version_a = st.session_state.budget_versions[version_a_idx]
+                version_b = st.session_state.budget_versions[version_b_idx]
+
+                st.markdown("---")
+                st.markdown(f"### Comparison: {version_a['name']} → {version_b['name']}")
+
+                # Compare revenue totals
+                calc_a = PLCalculator(version_a['data'])
+                calc_b = PLCalculator(version_b['data'])
+
+                dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
+
+                # Calculate totals for both versions
+                b2b_a = sum(calc_a.calculate_b2b_revenue().values())
+                b2b_b = sum(calc_b.calculate_b2b_revenue().values())
+
+                dtc_a = sum(sum(calc_a.calculate_dtc_revenue(t).values()) for t in dtc_territories)
+                dtc_b = sum(sum(calc_b.calculate_dtc_revenue(t).values()) for t in dtc_territories)
+
+                mp_a = sum(calc_a.calculate_total_marketplace_revenue().values())
+                mp_b = sum(calc_b.calculate_total_marketplace_revenue().values())
+
+                total_a = b2b_a + dtc_a + mp_a
+                total_b = b2b_b + dtc_b + mp_b
+
+                # Show comparison metrics
+                st.markdown("#### 📊 Revenue Changes")
+
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    delta_total = total_b - total_a
+                    delta_pct_total = (delta_total / total_a * 100) if total_a != 0 else 0
+                    st.metric(
+                        "Total Revenue",
+                        f"£{total_b:,.0f}",
+                        f"£{delta_total:+,.0f} ({delta_pct_total:+.1f}%)"
+                    )
+
+                with col2:
+                    delta_b2b = b2b_b - b2b_a
+                    delta_pct_b2b = (delta_b2b / b2b_a * 100) if b2b_a != 0 else 0
+                    st.metric(
+                        "B2B",
+                        f"£{b2b_b:,.0f}",
+                        f"£{delta_b2b:+,.0f} ({delta_pct_b2b:+.1f}%)"
+                    )
+
+                with col3:
+                    delta_dtc = dtc_b - dtc_a
+                    delta_pct_dtc = (delta_dtc / dtc_a * 100) if dtc_a != 0 else 0
+                    st.metric(
+                        "DTC",
+                        f"£{dtc_b:,.0f}",
+                        f"£{delta_dtc:+,.0f} ({delta_pct_dtc:+.1f}%)"
+                    )
+
+                with col4:
+                    delta_mp = mp_b - mp_a
+                    delta_pct_mp = (delta_mp / mp_a * 100) if mp_a != 0 else 0
+                    st.metric(
+                        "Marketplace",
+                        f"£{mp_b:,.0f}",
+                        f"£{delta_mp:+,.0f} ({delta_pct_mp:+.1f}%)"
+                    )
+
+                # Comparison table
+                st.markdown("#### 📋 Detailed Comparison")
+
+                comparison_data = []
+                for channel, val_a, val_b in [
+                    ('B2B', b2b_a, b2b_b),
+                    ('DTC', dtc_a, dtc_b),
+                    ('Marketplace', mp_a, mp_b),
+                    ('**Total**', total_a, total_b)
+                ]:
+                    delta = val_b - val_a
+                    delta_pct = (delta / val_a * 100) if val_a != 0 else 0
+
+                    comparison_data.append({
+                        'Channel': channel,
+                        'Version A': f"£{val_a:,.0f}",
+                        'Version B': f"£{val_b:,.0f}",
+                        'Change (£)': f"£{delta:+,.0f}" if delta >= 0 else f"-£{abs(delta):,.0f}",
+                        'Change (%)': f"{delta_pct:+.1f}%"
+                    })
+
+                comparison_df = pd.DataFrame(comparison_data)
+                st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+
+                # Export comparison
+                csv = comparison_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Export Comparison",
+                    data=csv,
+                    file_name=f"version_comparison_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    key="export_comparison_csv"
+                )
+
+    with tab4:
+        st.markdown("### 📜 Change Log")
+        st.markdown("History of all saved versions")
+
+        if not st.session_state.budget_versions:
+            st.info("No versions saved yet. The change log will appear here once you save versions.")
+        else:
+            # Display versions in reverse chronological order
+            for idx in range(len(st.session_state.budget_versions) - 1, -1, -1):
+                version = st.session_state.budget_versions[idx]
+
+                with st.expander(f"**{version['name']}** - {version['timestamp']}", expanded=(idx == len(st.session_state.budget_versions) - 1)):
+                    col1, col2 = st.columns([3, 1])
+
+                    with col1:
+                        st.markdown(f"**Timestamp:** {version['timestamp']}")
+                        if version.get('tag'):
+                            st.markdown(f"**Tag:** {version['tag']}")
+                        if version['notes']:
+                            st.markdown(f"**Notes:**")
+                            st.markdown(f"> {version['notes']}")
+                        else:
+                            st.caption("No notes provided")
+
+                    with col2:
+                        # Calculate version stats
+                        calc_ver = PLCalculator(version['data'])
+                        dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
+
+                        b2b_ver = sum(calc_ver.calculate_b2b_revenue().values())
+                        dtc_ver = sum(sum(calc_ver.calculate_dtc_revenue(t).values()) for t in dtc_territories)
+                        mp_ver = sum(calc_ver.calculate_total_marketplace_revenue().values())
+                        total_ver = b2b_ver + dtc_ver + mp_ver
+
+                        st.metric("Total Revenue", f"£{total_ver:,.0f}")
+
+                    st.markdown("---")
+                    st.caption(f"Version index: {idx}")
+
+
 def render_export(data):
     """Render export functionality"""
     st.markdown('<p class="main-header">⬇️ Export Data</p>', unsafe_allow_html=True)
@@ -2081,6 +2419,8 @@ def main():
         render_pl_view(data)
     elif page == "📉 Budget vs Actuals":
         render_budget_vs_actuals(data)
+    elif page == "📚 Version Control":
+        render_version_control(data)
     elif page == "⬇️ Export":
         render_export(data)
 
