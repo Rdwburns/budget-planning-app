@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.12 - Add overhead categories debug output
-__version__ = "1.0.12"
+# Version: 1.0.13 - Fix marketing extraction from correct data sources
+__version__ = "1.0.13"
 
 @dataclass
 class PLLineItem:
@@ -301,35 +301,96 @@ class PLCalculator:
     def calculate_marketing_costs(self, territory: str = None) -> Dict[str, Dict[str, float]]:
         """
         Calculate marketing costs broken down by category
+        Marketing data comes from:
+        - DTC sheets: Marketing Budget (row 36), Brand Spend (row 29)
+        - B2B sheet: Retros, Promo Cards (Promo Funding), Trade Shows (rows 144, 193, 204)
+        - Amazon sheet: Marketplace Marketing (rows 44-60)
+        - Paid Social, Paid Search/App, TikTok Marketing: £0 (blank for FY27)
+
         Returns dict of {category_name: {month: value}}
         """
-        oh = self.data.get('overheads', pd.DataFrame())
-        if oh.empty or 'Category' not in oh.columns:
-            return {}
-
-        # DEBUG: Store all unique categories for diagnostics
-        if not hasattr(self, '_all_overhead_categories'):
-            self._all_overhead_categories = sorted(oh['Category'].dropna().unique().tolist())
-
-        # Marketing categories from Excel P&L structure
-        marketing_categories = [
-            'D2C Model Marketing',
-            'D2C Model Brand',
-            'Paid Social',
-            'Paid Search/App',
-            'Retros',
-            'Promo Cards',
-            'Trade Shows',
-            'Marketplace Marketing',
-            'TikTok Marketing'
-        ]
-
         result = {}
-        for category in marketing_categories:
-            monthly_values = self.calculate_overheads(territory=territory, category=category)
-            # Only include if there's non-zero values
-            if sum(abs(v) for v in monthly_values.values()) > 0:
-                result[category] = monthly_values
+
+        # Initialize all categories to £0 for all months
+        for month in self.dates:
+            for category in ['D2C Model Marketing', 'D2C Model Brand', 'Paid Social', 'Paid Search/App',
+                           'Retros', 'Promo Cards', 'Trade Shows', 'Marketplace Marketing', 'TikTok Marketing']:
+                if category not in result:
+                    result[category] = {}
+                if month not in result[category]:
+                    result[category][month] = 0
+
+        # 1. DTC Marketing Budget (row 36)
+        dtc_territories = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
+        if territory is None or territory == 'Combined':
+            # Sum across all DTC territories
+            for dtc_territory in dtc_territories:
+                if dtc_territory in self.data.get('dtc', {}):
+                    dtc_data = self.data['dtc'][dtc_territory]
+                    marketing_row = dtc_data[dtc_data['Metric'] == 'Marketing Budget']
+                    if not marketing_row.empty:
+                        for month in self.dates:
+                            if month in marketing_row.columns:
+                                val = float(marketing_row[month].iloc[0]) if len(marketing_row) > 0 else 0
+                                result['D2C Model Marketing'][month] += val
+        elif territory in dtc_territories:
+            # Single DTC territory
+            if territory in self.data.get('dtc', {}):
+                dtc_data = self.data['dtc'][territory]
+                marketing_row = dtc_data[dtc_data['Metric'] == 'Marketing Budget']
+                if not marketing_row.empty:
+                    for month in self.dates:
+                        if month in marketing_row.columns:
+                            val = float(marketing_row[month].iloc[0]) if len(marketing_row) > 0 else 0
+                            result['D2C Model Marketing'][month] = val
+
+        # 2. DTC Brand Spend (row 29)
+        if territory is None or territory == 'Combined':
+            # Sum across all DTC territories
+            for dtc_territory in dtc_territories:
+                if dtc_territory in self.data.get('dtc', {}):
+                    dtc_data = self.data['dtc'][dtc_territory]
+                    brand_row = dtc_data[dtc_data['Metric'] == 'Brand Spend']
+                    if not brand_row.empty:
+                        for month in self.dates:
+                            if month in brand_row.columns:
+                                val = float(brand_row[month].iloc[0]) if len(brand_row) > 0 else 0
+                                result['D2C Model Brand'][month] += val
+        elif territory in dtc_territories:
+            # Single DTC territory
+            if territory in self.data.get('dtc', {}):
+                dtc_data = self.data['dtc'][territory]
+                brand_row = dtc_data[dtc_data['Metric'] == 'Brand Spend']
+                if not brand_row.empty:
+                    for month in self.dates:
+                        if month in brand_row.columns:
+                            val = float(brand_row[month].iloc[0]) if len(brand_row) > 0 else 0
+                            result['D2C Model Brand'][month] = val
+
+        # 3. B2B Marketing (Retros, Promo Cards, Trade Shows)
+        # B2B marketing applies to all territories (not territory-specific)
+        if territory is None or territory == 'Combined':
+            b2b_marketing = self.data.get('b2b_marketing', pd.DataFrame())
+            if not b2b_marketing.empty:
+                for _, row in b2b_marketing.iterrows():
+                    category = row['Marketing Category']
+                    for month in self.dates:
+                        if month in row.index:
+                            val = float(row[month]) if pd.notna(row[month]) else 0
+                            result[category][month] = val
+
+        # 4. Amazon Marketplace Marketing (rows 44-60)
+        # Amazon marketing applies to all territories
+        if territory is None or territory == 'Combined':
+            amazon_marketing = self.data.get('amazon_marketing', {})
+            for month in self.dates:
+                if month in amazon_marketing:
+                    result['Marketplace Marketing'][month] = amazon_marketing[month]
+
+        # 5. Paid Social, Paid Search/App, TikTok Marketing remain £0 (already initialized)
+
+        # Remove categories with all zero values to keep output clean
+        result = {k: v for k, v in result.items() if sum(abs(val) for val in v.values()) > 0}
 
         return result
 

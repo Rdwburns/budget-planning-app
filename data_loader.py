@@ -6,6 +6,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from datetime import datetime
 import numpy as np
+from typing import Dict
 
 class BudgetDataLoader:
     def __init__(self, file_path: str):
@@ -194,6 +195,7 @@ class BudgetDataLoader:
                 'Total Revenue': 25,  # CRITICAL FIX: was 24 (formula cell) - now uses Actual Revenue row
                 'Actual Revenue': 25,
                 'Missing Revenue (Cohort Adjustment)': 27,  # Fixed: was 26
+                'Brand Spend': 29,  # DTC Brand Spend
                 'Marketing Budget': 36,  # Row 36 is the actual Marketing Budget total
             }
 
@@ -227,6 +229,88 @@ class BudgetDataLoader:
         except Exception as e:
             print(f"Error loading DTC for {territory}: {e}")
             return pd.DataFrame()
+
+    def load_b2b_marketing_detail(self) -> pd.DataFrame:
+        """Load B2B marketing detail from specific rows (Retros, Promo Funding, Trade Shows)"""
+        try:
+            wb = load_workbook(self.file_path, read_only=True, data_only=True)
+            ws = wb['B2B']
+
+            # Marketing line items in B2B sheet
+            marketing_rows = {
+                'Retros': 144,
+                'Promo Cards': 193,  # Called "Promo Funding" in Excel but maps to "Promo Cards" in P&L
+                'Trade Shows': 204,
+            }
+
+            data = []
+
+            # Get month columns - header is on row 6, months start at column 5
+            all_months = []
+            for col in range(5, min(30, ws.max_column + 1)):
+                val = ws.cell(row=6, column=col).value
+                if val and isinstance(val, datetime):
+                    month_str = val.strftime('%Y-%m')
+                    all_months.append((col, month_str))
+
+            # Filter to FY27 period (2026-02 to 2027-01)
+            months = [(col, month) for col, month in all_months if self.fy27_start <= month <= self.fy27_end]
+
+            for metric, row in marketing_rows.items():
+                row_data = {'Marketing Category': metric}
+                for col_num, month in months:
+                    val = ws.cell(row=row, column=col_num).value
+                    # Handle numeric conversion - marketing costs are negative in Excel
+                    if val is not None:
+                        try:
+                            row_data[month] = float(val)
+                        except (ValueError, TypeError):
+                            row_data[month] = 0
+                    else:
+                        row_data[month] = 0
+                data.append(row_data)
+
+            wb.close()
+            return pd.DataFrame(data)
+        except Exception as e:
+            print(f"Error loading B2B marketing detail: {e}")
+            return pd.DataFrame()
+
+    def load_amazon_marketing(self) -> Dict[str, float]:
+        """Load Amazon marketing costs (rows 44-60 sum to Marketplace Marketing)"""
+        try:
+            wb = load_workbook(self.file_path, read_only=True, data_only=True)
+            ws = wb['Amazon']
+
+            # Get month columns - header is on row 2, months start at column 3
+            all_months = []
+            for col in range(3, min(30, ws.max_column + 1)):
+                val = ws.cell(row=2, column=col).value
+                if val and isinstance(val, datetime):
+                    month_str = val.strftime('%Y-%m')
+                    all_months.append((col, month_str))
+
+            # Filter to FY27 period (2026-02 to 2027-01)
+            months = [(col, month) for col, month in all_months if self.fy27_start <= month <= self.fy27_end]
+
+            # Sum rows 44-60 for each month (Marketplace Marketing)
+            marketing_by_month = {}
+            for col_num, month in months:
+                total = 0
+                for row in range(44, 61):  # Rows 44-60 inclusive
+                    val = ws.cell(row=row, column=col_num).value
+                    if val is not None:
+                        try:
+                            total += float(val)
+                        except (ValueError, TypeError):
+                            pass
+                marketing_by_month[month] = total
+
+            wb.close()
+            return marketing_by_month
+        except Exception as e:
+            print(f"Error loading Amazon marketing: {e}")
+            return {}
 
     def get_date_columns(self) -> list:
         """Get list of FY27 date columns from the model"""
@@ -357,6 +441,8 @@ def load_all_data(file_path: str) -> dict:
         'amazon': loader.load_amazon_data(),
         'cogs_rates': loader.load_cogs_rates(),
         'actuals': loader.load_actuals_data(),
+        'b2b_marketing': loader.load_b2b_marketing_detail(),
+        'amazon_marketing': loader.load_amazon_marketing(),
         'dates': loader.get_date_columns(),
         'territories': loader.territories,
         'territory_groups': loader.territory_groups,
