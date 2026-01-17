@@ -19,6 +19,7 @@ from features_phase1 import (
     render_data_quality_dashboard,
     render_waterfall_analysis
 )
+from marketing_module import render_marketing_management
 
 # Page config
 st.set_page_config(
@@ -109,7 +110,7 @@ def render_sidebar():
         page = st.radio(
             "Navigate to",
             ["📊 Dashboard", "💰 Revenue Inputs", "📦 B2B Management",
-             "💸 Cost Management", "🎯 Scenario Planning", "📈 P&L View",
+             "💸 Cost Management", "📣 Marketing", "🎯 Scenario Planning", "📈 P&L View",
              "📉 Budget vs Actuals", "📚 Version Control", "📈 Sensitivity Analysis",
              "📝 Comments & Notes", "📋 Assumptions", "🛡️ Data Quality", "💧 Waterfall Analysis",
              "⬇️ Export"],
@@ -2720,6 +2721,8 @@ def main():
         render_b2b_management(data)
     elif page == "💸 Cost Management":
         render_cost_management(data)
+    elif page == "📣 Marketing":
+        render_marketing_management(data)
     elif page == "🎯 Scenario Planning":
         render_scenario_planning(data)
     elif page == "📈 P&L View":
