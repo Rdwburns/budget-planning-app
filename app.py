@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #27ae60; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #3498db; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '✅ Version 1.0.7 - B2B Fix (Partial)'
+            '🔵 Version 1.0.8 - Grouping Territory Fix'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1661,15 +1661,17 @@ def render_pl_view(data):
     # Show diagnostic info in an expander
     with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=True):
         st.write(f"**pl_calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.7")
+        st.write(f"**Expected version**: 1.0.8")
 
-        if calc_version == "1.0.7":
-            st.success("✅ Version 1.0.7 loaded - B2B partial fix deployed")
-            st.info("UK should now show B2B revenue! Check territory breakdown.")
+        if calc_version == "1.0.8":
+            st.success("✅ Version 1.0.8 loaded - Grouping territory aggregation deployed")
+            st.info("US, Other EU aggregation should now capture remaining revenue! Check territory breakdown.")
+        elif calc_version == "1.0.7":
+            st.warning("⚠️ Version 1.0.7 - Partial fix only. Need to update to 1.0.8")
         elif calc_version in ["1.0.6", "1.0.5"]:
-            st.warning(f"⚠️ Version {calc_version} - Need to update to 1.0.7")
+            st.warning(f"⚠️ Version {calc_version} - Old version, need 1.0.8")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.7, got {calc_version}")
+            st.error(f"❌ Wrong version! Expected 1.0.8, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")

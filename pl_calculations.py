@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.7 - Fix B2B: try both full name AND territory code (Excel inconsistent)
-__version__ = "1.0.7"
+# Version: 1.0.8 - Add grouping territory aggregation (US, Other EU, ROW)
+__version__ = "1.0.8"
 
 @dataclass
 class PLLineItem:
@@ -55,28 +55,49 @@ class PLCalculator:
         b2b = b2b_original.copy()
 
         if territory:
-            # Map territory code to full country name for filtering
-            # TRY BOTH: Excel B2B sheet is inconsistent (some use codes, some use full names)
-            country_name = self.territory_to_country.get(territory, territory)
+            # Special handling for grouping territories
+            if territory == 'US':
+                # Try multiple variations for United States
+                b2b = b2b_original[b2b_original['Country'].isin(['United States', 'US', 'USA'])].copy()
+                search_attempts = "United States OR US OR USA"
+            elif territory == 'Other EU':
+                # Aggregate all EU countries NOT explicitly mapped
+                explicit_countries = list(self.territory_to_country.values()) + list(self.territory_to_country.keys())
+                # Get all countries, exclude explicit ones, exclude US/ROW
+                all_countries = b2b_original['Country'].unique() if 'Country' in b2b_original.columns else []
+                other_eu_countries = [c for c in all_countries if c not in explicit_countries and c not in ['United States', 'US', 'USA']]
+                # Filter to likely EU countries (this is approximate - includes some non-EU)
+                b2b = b2b_original[b2b_original['Country'].isin(other_eu_countries)].copy()
+                search_attempts = f"OTHER EU (aggregating {len(other_eu_countries)} unmapped countries)"
+            elif territory == 'ROW':
+                # For now, ROW is empty - would need Country Group or explicit list
+                b2b = b2b_original[b2b_original['Country'] == 'ROW'].copy()  # Unlikely to exist
+                search_attempts = "ROW (Rest of World)"
+            else:
+                # Standard territory handling
+                # TRY BOTH: Excel B2B sheet is inconsistent (some use codes, some use full names)
+                country_name = self.territory_to_country.get(territory, territory)
 
-            # Try full name first
-            b2b = b2b_original[b2b_original['Country'] == country_name].copy()
+                # Try full name first
+                b2b = b2b_original[b2b_original['Country'] == country_name].copy()
 
-            # If not found, try the territory code itself
-            if len(b2b) == 0:
-                b2b = b2b_original[b2b_original['Country'] == territory].copy()
+                # If not found, try the territory code itself
+                if len(b2b) == 0:
+                    b2b = b2b_original[b2b_original['Country'] == territory].copy()
+
+                search_attempts = f"{country_name} OR {territory}" if country_name != territory else country_name
 
             # DEBUG: Track B2B matching
             if debug:
                 self._b2b_debug = self._b2b_debug if hasattr(self, '_b2b_debug') else {}
                 available_countries = b2b_original['Country'].unique().tolist() if 'Country' in b2b_original.columns else []
                 revenue_found = sum([pd.to_numeric(b2b[col], errors='coerce').sum() for col in self.dates if col in b2b.columns])
-                search_attempts = f"{country_name} OR {territory}" if country_name != territory else country_name
                 self._b2b_debug[territory] = {
                     'searching_for': search_attempts,
                     'available_in_excel': available_countries,
                     'found': len(b2b) > 0,
-                    'revenue': revenue_found
+                    'revenue': revenue_found,
+                    'countries_matched': b2b['Country'].unique().tolist() if len(b2b) > 0 and 'Country' in b2b.columns else []
                 }
         elif country_group:
             b2b = b2b[b2b['Country Group'] == country_group]
