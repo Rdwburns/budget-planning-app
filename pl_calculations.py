@@ -7,8 +7,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-# Version: 1.0.3 - File renamed from calculations.py to force Streamlit Cloud reload
-__version__ = "1.0.3"
+# Version: 1.0.4 - Added debug logging to identify which territories return zero
+__version__ = "1.0.4"
 
 @dataclass
 class PLLineItem:
@@ -291,7 +291,7 @@ class PLCalculator:
 
         return df
 
-    def calculate_combined_pl(self) -> pd.DataFrame:
+    def calculate_combined_pl(self, debug=False) -> pd.DataFrame:
         """Calculate combined P&L across all territories"""
         all_pls = {}
         # Include ALL territories with DTC, B2B, or Marketplace revenue
@@ -300,9 +300,23 @@ class PLCalculator:
         # CRITICAL FIX: Expanded from 8 to 14 territories to get full £23.4M revenue
         territories = ['UK', 'ES', 'DE', 'IT', 'FR', 'RO', 'PL', 'CZ', 'HU', 'SK', 'Other EU', 'US', 'AU', 'ROW']
 
+        # DEBUG: Track revenue by territory
+        territory_revenues = {}
+
         for territory in territories:
             pl = self.calculate_territory_pl(territory)
             all_pls[territory] = pl
+
+            # DEBUG: Extract total revenue for this territory
+            if ('Revenue', 'Total Revenue') in pl.index:
+                total_rev = pl.loc[('Revenue', 'Total Revenue')].sum()
+                territory_revenues[territory] = total_rev
+            else:
+                territory_revenues[territory] = 0
+
+        # Store debug info if requested
+        if debug:
+            self._debug_territory_revenues = territory_revenues
 
         # Sum all territories
         combined = all_pls[territories[0]].copy()

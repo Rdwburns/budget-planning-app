@@ -97,9 +97,9 @@ def render_sidebar():
 
         # Version indicator
         st.markdown(
-            '<div style="text-align: center; padding: 5px; background-color: #9b59b6; color: white; '
+            '<div style="text-align: center; padding: 5px; background-color: #e67e22; color: white; '
             'border-radius: 5px; font-size: 12px; margin-bottom: 10px;">'
-            '⚡ Version 1.0.3 - File Rename Fix'
+            '🔍 Version 1.0.4 - Debug Diagnostics'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1659,19 +1659,17 @@ def render_pl_view(data):
     calc_version = getattr(calculations, '__version__', 'UNKNOWN')
 
     # Show diagnostic info in an expander
-    with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=False):
+    with st.expander("🔧 Diagnostic Info (Click to expand)", expanded=True):
         st.write(f"**pl_calculations.py version**: {calc_version}")
-        st.write(f"**Expected version**: 1.0.3")
-        st.write(f"**NOTE**: Renamed from calculations.py to force Streamlit Cloud to reload")
+        st.write(f"**Expected version**: 1.0.4")
 
-        if calc_version == "1.0.3":
-            st.success("✅ Correct version loaded - Territory fix deployed!")
-            st.info("P&L should now show £23.4M total revenue")
-        elif calc_version == "1.0.2" or calc_version == "1.0.1":
-            st.error(f"❌ OLD version still cached! Expected 1.0.3, got {calc_version}")
-            st.warning("Streamlit Cloud is still loading the old calculations.py file")
+        if calc_version == "1.0.4":
+            st.success("✅ Version 1.0.4 loaded - Debug logging enabled")
+            st.info("Check '🔍 Territory Revenue Breakdown' below to see which territories contribute zero")
+        elif calc_version == "1.0.3":
+            st.warning("⚠️ Version 1.0.3 - Need to update to 1.0.4 for debug info")
         else:
-            st.error(f"❌ Wrong version! Expected 1.0.3, got {calc_version}")
+            st.error(f"❌ Wrong version! Expected 1.0.4, got {calc_version}")
 
         # Show territory count that will be used
         st.write(f"**View Type**: {view_type}")
@@ -1682,7 +1680,27 @@ def render_pl_view(data):
         if territory:
             pl = calc.calculate_territory_pl(territory)
         else:
-            pl = calc.calculate_combined_pl()
+            pl = calc.calculate_combined_pl(debug=True)
+
+            # Show debug territory revenues
+            if hasattr(calc, '_debug_territory_revenues'):
+                with st.expander("🔍 Territory Revenue Breakdown (Debug)", expanded=False):
+                    st.write("**Revenue by Territory** (Annual Total):")
+                    import pandas as pd
+                    debug_df = pd.DataFrame([
+                        {'Territory': t, 'Revenue': format_currency(r)}
+                        for t, r in calc._debug_territory_revenues.items()
+                    ])
+                    st.dataframe(debug_df, hide_index=True)
+
+                    # Show which territories have zero
+                    zero_territories = [t for t, r in calc._debug_territory_revenues.items() if r == 0]
+                    if zero_territories:
+                        st.warning(f"⚠️ **Territories with ZERO revenue**: {', '.join(zero_territories)}")
+                        st.write("These territories are NOT contributing to the total!")
+
+                    total_debug_rev = sum(calc._debug_territory_revenues.values())
+                    st.metric("Total from all territories", format_currency(total_debug_rev))
 
         # Format for display
         display_pl = pl.copy()
