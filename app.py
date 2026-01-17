@@ -1324,11 +1324,9 @@ def render_scenario_planning(data):
             key="sc_oh"
         )
 
-    # Build scenario
+    # Build scenario - apply DTC growth to ALL DTC territories
+    dtc_territories_scenario = ['UK', 'ES', 'IT', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
     scenario = {
-        'dtc_revenue_UK': dtc_growth,
-        'dtc_revenue_ES': dtc_growth,
-        'dtc_revenue_IT': dtc_growth,
         'b2b_growth': b2b_growth,
         'mp_growth': mp_growth,
         'cogs_change': cogs_change,
@@ -1336,6 +1334,10 @@ def render_scenario_planning(data):
         'marketing_change': marketing_change,
         'overhead_change': overhead_change,
     }
+
+    # Add DTC growth for all territories
+    for territory in dtc_territories_scenario:
+        scenario[f'dtc_revenue_{territory}'] = dtc_growth
 
     st.markdown("---")
 

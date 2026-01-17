@@ -32,12 +32,28 @@ class PLCalculator:
             'DTC': 0.24, 'B2B': 0.26, 'Marketplace': 0.18, 'TikTok': 0.24
         })
 
+        # Territory code to B2B country name mapping
+        self.territory_to_country = {
+            'UK': 'United Kingdom',
+            'ES': 'Spain',
+            'DE': 'Germany',
+            'IT': 'Italy',
+            'FR': 'France',
+            'RO': 'Romania',
+            'PL': 'Poland',
+            'CZ': 'Czech Republic',
+            'HU': 'Hungary',
+            'SK': 'Slovakia',
+        }
+
     def calculate_b2b_revenue(self, territory: str = None, country_group: str = None) -> Dict[str, float]:
         """Calculate B2B revenue by month, optionally filtered"""
         b2b = self.data['b2b'].copy()
 
         if territory:
-            b2b = b2b[b2b['Country'] == territory]
+            # Map territory code to full country name for filtering
+            country_name = self.territory_to_country.get(territory, territory)
+            b2b = b2b[b2b['Country'] == country_name]
         elif country_group:
             b2b = b2b[b2b['Country Group'] == country_group]
 
@@ -45,10 +61,9 @@ class PLCalculator:
         for col in self.dates:
             if col in b2b.columns:
                 val = pd.to_numeric(b2b[col], errors='coerce').sum()
-                # Apply scenario adjustment
-                adj_key = f'b2b_revenue_{territory or country_group}'
-                if adj_key in self.scenario:
-                    val *= (1 + self.scenario[adj_key] / 100)
+                # Apply scenario adjustment (use 'b2b_growth' key from scenario planning)
+                if 'b2b_growth' in self.scenario:
+                    val *= (1 + self.scenario['b2b_growth'] / 100)
                 result[col] = val
 
         return result
@@ -124,6 +139,11 @@ class PLCalculator:
                     val = 0
                 else:
                     val = float(val)
+
+                # Apply scenario adjustment (use 'mp_growth' key from scenario planning)
+                if 'mp_growth' in self.scenario:
+                    val *= (1 + self.scenario['mp_growth'] / 100)
+
                 result[col] = val
             else:
                 result[col] = 0
@@ -265,8 +285,10 @@ class PLCalculator:
     def calculate_combined_pl(self) -> pd.DataFrame:
         """Calculate combined P&L across all territories"""
         all_pls = {}
-        # Include all territories with DTC, B2B, or Marketplace revenue
-        territories = ['UK', 'ES', 'DE', 'IT', 'FR', 'RO', 'CZ', 'HU', 'SK', 'Other EU']
+        # Include ALL territories with DTC, B2B, or Marketplace revenue
+        # This includes DTC territories (UK, ES, IT, RO, CZ, HU, SK, Other EU)
+        # and marketplace-only territories (FR, DE, PL, US, AU, ROW)
+        territories = ['UK', 'ES', 'DE', 'IT', 'FR', 'RO', 'PL', 'CZ', 'HU', 'SK', 'Other EU', 'US', 'AU', 'ROW']
 
         for territory in territories:
             pl = self.calculate_territory_pl(territory)
